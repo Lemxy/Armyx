@@ -59,14 +59,43 @@ export const savings = (src: string) => {
 
 const prop = (src: string, k: string) => src.match(new RegExp(String.raw`^\?${k}:\s*(.+)$`, 'm'))?.[1].trim()
 
-/** Compact map of the whole vault for an agent: one line per note, saying what it is, where it lives and what it links to. */
-export const graphMap = (notes: Note[]) => {
+/** How the agent should read `graphMap` (kept next to it so the two never drift apart). */
+export const MAP_INTRO =
+  'Below is the map of the whole project graph, one line per note: `id path — about [exports] -> ids of linked notes`. ' +
+  'Use it to know what exists and where to look; ask for a specific file when you need its contents.'
+
+const MAP_BUDGET = 5000 // tokens; the map is resent on every turn, so it must stay small
+
+/**
+ * Compact map of the vault for an agent. Short numeric ids instead of long note names (links were most of the size),
+ * and a token budget: the most connected notes go in first, the rest are summarized as a count.
+ */
+export const graphMap = (notes: Note[], budget = MAP_BUDGET) => {
   const have = new Set(notes.map((n) => n.name))
-  return notes.map((n) => {
-    const to = links(n.content).filter((l) => have.has(l) && l !== n.name)
-    const what = [prop(n.content, 'path') ?? title(n), prop(n.content, 'about'), prop(n.content, 'exports') && `[${prop(n.content, 'exports')}]`].filter(Boolean).join(' — ')
-    return `${n.name}: ${what}${to.length ? ` -> ${to.join(',')}` : ''}`
-  }).join('\n')
+  const out = new Map(notes.map((n) => [n.name, links(n.content).filter((l) => have.has(l) && l !== n.name)]))
+  const degree = new Map(notes.map((n) => [n.name, out.get(n.name)!.length]))
+  for (const to of out.values()) for (const t of to) degree.set(t, degree.get(t)! + 1)
+
+  // pick by connectivity until the budget is spent, then list in name order
+  const ranked = [...notes].sort((a, b) => degree.get(b.name)! - degree.get(a.name)! || a.name.localeCompare(b.name))
+  const picked: Note[] = []
+  let used = 0
+  for (const n of ranked) {
+    const cost = tokens(n.name + (prop(n.content, 'path') ?? title(n)) + (prop(n.content, 'about') ?? '') + (prop(n.content, 'exports') ?? '')) + (out.get(n.name)!.length * 2) + 4
+    if (used + cost > budget && picked.length) break
+    used += cost; picked.push(n)
+  }
+  picked.sort((a, b) => a.name.localeCompare(b.name))
+  const id = new Map(picked.map((n, i) => [n.name, i + 1]))
+
+  const lines = picked.map((n) => {
+    const to = out.get(n.name)!.filter((l) => id.has(l)).map((l) => id.get(l))
+    const exp = prop(n.content, 'exports')?.split(', ').slice(0, 5).join(', ')
+    const what = [prop(n.content, 'path') ?? title(n), prop(n.content, 'about')?.slice(0, 80), exp && `[${exp}]`].filter(Boolean).join(' — ')
+    return `${id.get(n.name)} ${what}${to.length ? ` -> ${to.join(',')}` : ''}`
+  })
+  if (picked.length < notes.length) lines.push(`(${notes.length - picked.length} less connected notes omitted)`)
+  return lines.join('\n')
 }
 
 /** For a scanned project: tokens of the graph map vs a rough estimate of the source it stands in for (~4 bytes/token). */

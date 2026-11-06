@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Bot, Check, ChevronDown, Clock, Copy, CornerDownLeft, Plus, Send, Trash2, X } from 'lucide-react'
 import Markdown from './Markdown'
 import { useI18n } from '../i18n'
-import { graphMap, tokens, type Note } from '../deso'
+import { graphMap, MAP_INTRO, tokens, type Note } from '../deso'
 import { agyModels, inTauri, runAgentCli } from '../vault'
 
 type Id = 'claude' | 'agy'
@@ -26,9 +26,7 @@ const EFFORTS = [['low', 1024], ['medium', 4096], ['high', 16384], ['max', 32768
 // What the agent keeps in context: the newest turns that fit. Older turns stay in the saved chat, just not in the prompt.
 const MAX_TURNS = 24, MAX_CHARS = 30000
 const SYSTEM = (map: string) =>
-  'You are the assistant inside DesoVault, a knowledge-graph note app. Below is the map of the whole project graph, one line per note: ' +
-  '`name: path — about [exports] -> linked notes`. Use it to know what exists and where to look; ask for a specific file when you need its contents. ' +
-  'Be concise and answer in the user\'s language.\n\n# Graph map\n' + map
+  `You are the assistant inside DesoVault, a knowledge-graph note app. ${MAP_INTRO} Be concise and answer in the user's language.\n\n# Graph map\n${map}`
 
 const trim = (msgs: Msg[]) => {
   const ok = msgs.filter((m) => !m.error)

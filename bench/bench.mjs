@@ -5,11 +5,12 @@
 //   node bench/bench.mjs <project> <graph dir> bench/questions.horizon.json [model]
 import { execFileSync, spawnSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
+import { MAP_INTRO } from '../src/deso.ts'
 
 const [project, graph, qfile, model = 'claude-haiku-5-5'] = process.argv.slice(2)
 const questions = JSON.parse(readFileSync(qfile, 'utf8'))
 const map = execFileSync('node', ['bench/map.mjs', graph], { encoding: 'utf8', maxBuffer: 1 << 26 })
-const SYSTEM = 'You are the assistant inside DesoVault, a knowledge-graph note app. Below is the map of the whole project graph, one line per note: `name: path — about [exports] -> linked notes`. Use it to know what exists and where to look; ask for a specific file when you need its contents. Be concise.\n\n# Graph map\n'
+const SYSTEM = `You are the assistant inside DesoVault, a knowledge-graph note app. ${MAP_INTRO} Be concise.\n\n# Graph map\n`
 
 function run(prompt) {
   const r = spawnSync('claude', ['-p', '--output-format', 'json', '--model', model, '--tools', 'Read,Grep,Glob', '--max-budget-usd', '1', '--no-session-persistence'],

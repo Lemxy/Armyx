@@ -93,7 +93,7 @@ fn parse(rel_path: &str, ext: &str, src: &str, all: &HashSet<String>) -> (String
         if about.is_empty() && i < 12 {
             let c = t.trim_start_matches(|c: char| matches!(c, '/' | '*' | '#' | '!' | '"' | '\'' | ' ')).trim();
             let is_doc = t.starts_with("//") || t.starts_with("/*") || t.starts_with("\"\"\"") || (t.starts_with('#') && ext != "md" && !t.starts_with("#!")) || (ext == "md" && t.starts_with("# "));
-            if is_doc && !c.is_empty() { about = c.chars().take(100).collect() }
+            if is_doc && !c.is_empty() { about = c.trim_end_matches(['"', '\'', '*', '/', ' ']).chars().take(100).collect() }
         }
         match ext {
             "ts" | "tsx" | "js" | "jsx" | "mjs" | "cjs" => {
