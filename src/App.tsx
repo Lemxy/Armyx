@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Bot, Gauge, Network, PenLine, Settings } from 'lucide-react'
+import { Gauge, Network, PenLine, Settings, Sparkles } from 'lucide-react'
 import { mapVsSource, savings, type Note } from './deso'
 import { backend, deleteNote, inTauri, loadNotes, rescanProject, saveNote, activeProject, switchProject } from './vault'
 import { useI18n } from './i18n'
@@ -12,6 +12,7 @@ import TokenInspector from './components/TokenInspector'
 import ContextMenu, { type MenuItem, type MenuState } from './components/ContextMenu'
 import AgentSidebar from './components/AgentSidebar'
 import Modal from './components/Modal'
+import Segmented from './components/Segmented'
 
 const TABS = [['editor', 'editor', PenLine], ['graph', 'graph', Network], ['tokens', 'tokensTab', Gauge]] as const
 type Tab = (typeof TABS)[number][0]
@@ -97,50 +98,38 @@ export default function App() {
   const k = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n))
   const open = (n: string) => { setCurrent(n); setTab('editor') }
   const create = (n: string) => update(n, `# ${n}\n`)
-  const iconBtn = 'p-1.5 rounded-[2px] border border-line bg-field hover:border-line2 text-mut hover:text-fg'
+  const iconBtn = 'btn-press p-2 rounded-full text-mut hover:text-fg hover:bg-panel'
 
   return (
     <div className="h-full flex text-sm">
       <Sidebar notes={notes} current={current} project={project} onSelect={open} onNew={(n) => { create(n); open(n) }}
         onMenu={showMenu} onCopy={copyLink} onDelete={setDeleting} onProjects={() => setModal('project')} onRescan={inTauri ? () => rescan().catch(console.error) : undefined} />
       <main className="flex-1 flex flex-col min-w-0">
-        <nav className="flex items-center gap-3 px-3 h-11 border-b border-line bg-surface">
-          <div className="flex gap-4 self-stretch">
-            {TABS.map(([id, label, Icon]) => (
-              <button key={id} onClick={() => setTab(id)}
-                className={`flex items-center gap-1.5 text-xs tracking-wide whitespace-nowrap border-b-2 -mb-px ${tab === id ? 'border-accent text-fg font-medium' : 'border-transparent text-dim hover:text-mut'}`}>
-                <Icon size={12} />{t(label)}
-              </button>
-            ))}
-          </div>
-          <span title={scanned ? t('mapTip') : backend} className="ml-auto border border-line bg-field px-2 py-0.5 text-micro text-dim tabular-nums font-mono">
+        <nav className="flex items-center gap-4 px-5 h-14 border-b border-line bg-surface">
+          <Segmented<Tab> value={tab} onChange={setTab} className="w-[27rem]"
+            options={TABS.map(([id, label, Icon]) => [id, <><Icon size={13} />{t(label)}</>] as const)} />
+          <span title={scanned ? t('mapTip') : backend} className="ml-auto text-micro text-dim tabular-nums">
             {scanned
               ? <>{t('mapBadge', { m: k(scanned.map), s: k(scanned.src) })}</>
-              : <><span className="text-accent">−{total.pct}%</span> {t('tokens')}</>}
+              : <><span className="font-serif text-base font-semibold text-accent">−{total.pct}%</span> {t('tokens')} {t('tokSaved')}</>}
           </span>
           <button onClick={() => setAgents((a) => !a)} title={t('agentsTitle')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-[2px] border bg-field hover:border-line2 text-micro tracking-wide uppercase font-mono ${agents ? 'border-accent text-fg' : 'border-line text-mut hover:text-fg'}`}>
-            <Bot size={13} />{t('agents')}
+            className={`btn-press flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-xs ${agents ? 'border-accent text-accent bg-accent-dim' : 'border-line text-mut hover:text-fg hover:border-line2'}`}>
+            <Sparkles size={13} />{t('agents')}
           </button>
-          <button onClick={() => setModal('settings')} title={t('settings')} className={iconBtn}><Settings size={14} /></button>
+          <button onClick={() => setModal('settings')} title={t('settings')} className={iconBtn}><Settings size={15} /></button>
         </nav>
         <div key={tab} className="flex-1 min-h-0 anim-fade">
           {tab === 'graph' ? <CircuitGraph notes={notes} current={current} onOpen={open} onNew={create}
-              onMenu={showMenu} onCopy={copyLink} onDelete={setDeleting} />
+              onMenu={showMenu} onCopy={copyLink} onDelete={setDeleting} project={project} />
             : !note ? (
-              <div className="h-full flex items-center pl-[12%] gap-10 font-mono">
-                <svg width="168" height="76" viewBox="0 0 168 76" fill="none" stroke="var(--line2)" strokeWidth="1" aria-hidden className="shrink-0">
-                  <path d="M4 38 H58" /><path d="M58 38 L98 18" stroke="var(--accent)" /><path d="M98 38 H164" strokeDasharray="3 4" />
-                  <circle cx="4" cy="38" r="2.5" fill="var(--line2)" /><circle cx="58" cy="38" r="2.5" fill="var(--line2)" />
-                  <rect x="94" y="34" width="8" height="8" /><circle cx="164" cy="38" r="2.5" />
-                  <path d="M20 58 V68 M16 68 H24" /><path d="M130 58 V68 M126 68 H134" />
+              <div className="h-full flex flex-col items-center justify-center gap-4 text-center anim-rise">
+                <svg width="44" height="44" viewBox="0 0 18 18" fill="none" stroke="var(--accent)" strokeWidth=".6" aria-hidden>
+                  <path d="M9 1.5 L16.5 9 L9 16.5 L1.5 9 Z" /><path d="M9 5.5 L12.5 9 L9 12.5 L5.5 9 Z" />
                 </svg>
-                <div className="flex flex-col gap-2 items-start">
-                  <span className="text-micro tracking-widest text-dim">STATUS: NO ACTIVE LOG</span>
-                  <span className="text-micro tracking-widest text-dim">CIRCUIT: OPEN</span>
-                  <span className="text-xs text-mut mt-1">INITIALIZE NODE TO ENERGIZE GRAPH</span>
-                  <button onClick={() => setCreating(true)} className="mt-2 px-2.5 py-1 rounded-[2px] border border-line bg-field hover:border-accent text-micro uppercase tracking-wider text-fg">{t('createFirst')}</button>
-                </div>
+                <h1 className="font-serif text-[40px] leading-tight font-medium">{t('emptyTitle')}</h1>
+                <p className="text-mut max-w-xs">{t('emptySub')}</p>
+                <button onClick={() => setCreating(true)} className="btn-press mt-2 px-5 py-2.5 rounded-full bg-accent text-bg text-sm font-medium hover:opacity-90">{t('createFirst')}</button>
               </div>)
             : tab === 'editor' ? <Editor key={note.name} note={note} notes={notes} onChange={(c) => update(note.name, c)} />
             : <TokenInspector note={note} scanned={scanned} />}
@@ -154,10 +143,10 @@ export default function App() {
       {creating && <FirstNote taken={notes} onCreate={(n) => { create(n); open(n); setCreating(false) }} onClose={() => setCreating(false)} />}
       {deleting && (
         <Modal title={t('deleteTitle')} onClose={() => setDeleting('')}>
-          <p className="text-mut font-mono text-xs">{t('deleteConfirm', { n: deleting })}</p>
+          <p className="text-mut">{t('deleteConfirm', { n: deleting })}</p>
           <div className="flex justify-end gap-2">
-            <button onClick={() => setDeleting('')} className="px-3 py-1.5 rounded-[2px] border border-line bg-field text-micro uppercase tracking-wider text-mut hover:text-fg hover:border-line2">{t('cancel')}</button>
-            <button autoFocus onClick={() => remove(deleting)} className="px-3 py-1.5 rounded-[2px] border border-status-err text-micro uppercase tracking-wider text-status-err hover:bg-status-err hover:text-bg">{t('delete')}</button>
+            <button onClick={() => setDeleting('')} className="btn-press px-4 py-2 rounded-full border border-line text-xs text-mut hover:text-fg hover:border-line2">{t('cancel')}</button>
+            <button autoFocus onClick={() => remove(deleting)} className="btn-press px-4 py-2 rounded-full bg-status-err text-bg text-xs font-medium hover:opacity-90">{t('delete')}</button>
           </div>
         </Modal>
       )}
@@ -174,9 +163,9 @@ function FirstNote({ taken, onCreate, onClose }: { taken: Note[]; onCreate: (n: 
     <Modal title={t('newNote')} onClose={onClose}>
       <form onSubmit={(e) => { e.preventDefault(); if (n && !err) onCreate(n) }} className="flex flex-col gap-3">
         <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={t('noteName')}
-          className="px-3 py-1.5 rounded-[2px] bg-field border border-line focus:border-accent outline-none text-xs font-mono placeholder:text-dim" />
+          className="px-3.5 py-2 rounded-xl bg-field border border-line focus:border-accent outline-none text-sm placeholder:text-dim" />
         {err && <span className="text-micro text-status-err">{err}</span>}
-        <button disabled={!n || !!err} className="py-1.5 rounded-[2px] border border-accent text-accent hover:bg-accent-dim text-micro uppercase tracking-wider disabled:opacity-40">{t('noteCreate')}</button>
+        <button disabled={!n || !!err} className="btn-press py-2 rounded-full bg-accent text-bg text-sm font-medium hover:opacity-90 disabled:opacity-30">{t('noteCreate')}</button>
       </form>
     </Modal>
   )

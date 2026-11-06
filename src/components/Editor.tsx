@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { savings, type Note } from '../deso'
+import { savings, title, type Note } from '../deso'
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
@@ -8,20 +8,20 @@ function highlight(src: string) {
     .split('\n')
     .map((l) => {
       const inline = l
-        .replace(/(-&gt;)?@[\w-]+/g, '<span class="text-accent font-mono underline decoration-accent/40">$&</span>')
-        .replace(/(^|\s)(#[A-Za-z][\w-]*)/g, '$1<span class="text-dim font-mono">$2</span>')
-      if (/^# /.test(l)) return `<span class="font-serif text-base font-semibold text-fg tracking-tight">${inline}</span>`
-      if (/^\?/.test(l)) return `<span class="text-mut font-mono font-medium">${inline}</span>`
-      if (/^!/.test(l)) return `<span class="text-mut font-mono">${inline}</span>`
-      if (/^\+(?!&gt;)\S/.test(l)) return `<span class="text-status-ok font-mono">${inline}</span>`
-      if (/^-(?!&gt;)\S/.test(l)) return `<span class="text-status-err font-mono">${inline}</span>`
+        .replace(/(-&gt;)?@[\w-]+/g, '<span class="text-accent underline decoration-accent/30 underline-offset-2">$&</span>')
+        .replace(/(^|\s)(#[A-Za-z][\w-]*)/g, '$1<span class="text-dim">$2</span>')
+      if (/^# /.test(l)) return `<span class="font-semibold text-accent">${inline}</span>`
+      if (/^\?/.test(l)) return `<span class="text-mut font-medium">${inline}</span>`
+      if (/^!/.test(l)) return `<span class="text-mut">${inline}</span>`
+      if (/^\+(?!&gt;)\S/.test(l)) return `<span class="text-status-ok">${inline}</span>`
+      if (/^-(?!&gt;)\S/.test(l)) return `<span class="text-status-err">${inline}</span>`
       return inline
     })
     .join('\n')
 }
 
 // No wrapping, so one logical line is one visual line and the gutter numbers stay aligned.
-const shared = 'absolute inset-0 m-0 pt-6 pb-6 pl-4 pr-6 font-mono text-[13px] leading-6 whitespace-pre overflow-scroll'
+const shared = 'absolute inset-0 m-0 pt-2 pb-10 pl-5 pr-8 font-mono text-[13px] leading-6 whitespace-pre overflow-scroll'
 
 type Ac = { start: number; q: string; x: number; y: number }
 
@@ -44,7 +44,7 @@ export default function Editor({ note, notes, onChange }: { note: Note; notes: N
     const mark = document.createElement('span')
     mark.textContent = '@'
     mirror.current.appendChild(mark)
-    setAc({ start, q: m[1], x: mark.offsetLeft - el.scrollLeft, y: mark.offsetTop - el.scrollTop + 24 })
+    setAc({ start, q: m[1], x: mark.offsetLeft - el.scrollLeft, y: mark.offsetTop - el.scrollTop + 28 })
     setSel(0)
   }
   const pick = (name: string) => {
@@ -64,12 +64,15 @@ export default function Editor({ note, notes, onChange }: { note: Note; notes: N
   const lines = note.content.split('\n')
   return (
     <div className="flex flex-col h-full">
-      <div className="px-4 h-8 text-micro border-b border-line bg-surface flex items-center justify-between text-dim font-mono tabular-nums">
-        <span>{note.name}.deso</span>
-        <span>{s.d} tok vs {s.m} md · <span className="text-accent">{s.pct}% saved</span></span>
+      <div className="px-8 pt-8 pb-5 flex items-end justify-between gap-6 anim-rise">
+        <div className="min-w-0">
+          <span className="block text-micro text-dim mb-1">{note.name}.deso</span>
+          <h1 className="font-serif text-title font-semibold truncate">{title(note)}</h1>
+        </div>
+        <span className="shrink-0 text-micro text-dim tabular-nums pb-1.5">{s.d} vs {s.m} tok · <span className="text-accent">−{s.pct}%</span></span>
       </div>
       <div className="flex flex-1 min-h-0">
-      <div ref={gutter} aria-hidden className="w-12 shrink-0 overflow-hidden pt-6 text-dim text-micro leading-6 font-mono select-none pr-3 border-r border-line/50 text-right tabular-nums">
+      <div ref={gutter} aria-hidden className="w-14 shrink-0 overflow-hidden pt-2 text-line2 text-micro leading-6 font-mono select-none pr-2 text-right tabular-nums">
         {lines.map((_, i) => <div key={i} className="leading-6">{i + 1}</div>)}
       </div>
       <div className="relative flex-1 min-h-0 max-w-[84ch]">
@@ -83,10 +86,10 @@ export default function Editor({ note, notes, onChange }: { note: Note; notes: N
           className={`${shared} bg-transparent text-transparent caret-accent resize-none outline-none`} />
         {ac && hits.length > 0 && (
           <ul role="listbox" style={{ left: Math.min(ac.x, 400), top: ac.y }}
-            className="absolute z-10 w-56 py-1 rounded-[2px] bg-panel border border-line2 font-mono text-xs">
+            className="anim-menu absolute z-10 w-60 p-1.5 rounded-xl bg-panel border border-line shadow-float text-sm">
             {hits.map((n, i) => (
               <li key={n.name} role="option" aria-selected={i === sel} onMouseDown={(e) => { e.preventDefault(); pick(n.name) }}
-                className={`px-3 py-1 cursor-pointer ${i === sel ? 'bg-field text-accent' : 'text-mut'}`}>@{n.name}</li>
+                className={`px-2.5 py-1.5 rounded-lg cursor-pointer ${i === sel ? 'bg-field text-accent' : 'text-mut'}`}>@{n.name}</li>
             ))}
           </ul>
         )}

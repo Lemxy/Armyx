@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronsUpDown, GitFork, Plus, RefreshCw, Search } from 'lucide-react'
+import { ChevronsUpDown, Plus, RefreshCw, Search } from 'lucide-react'
 import { links, savings, tags, type Note } from '../deso'
 import { useI18n } from '../i18n'
 import { projectLabel } from '../vault'
@@ -41,68 +41,73 @@ export default function Sidebar({ notes, current, project, onSelect, onNew, onMe
   }
 
   return (
-    <aside className="w-60 shrink-0 border-r border-line bg-surface flex flex-col font-mono text-xs">
-      <div className="pt-3 pb-2.5 px-3 flex flex-col gap-2.5">
-        <div className="flex items-center gap-2 pb-2 border-b border-line">
-          <span className="w-3 h-px bg-accent" />
-          <GitFork size={12} className="text-accent" />
-          <span className="text-micro tracking-widest text-mut">DESOVAULT // LOGBOOK</span>
+    <aside className="w-64 shrink-0 border-r border-line bg-surface flex flex-col text-sm">
+      <div className="pt-5 pb-3 px-4 flex flex-col gap-3">
+        <div className="flex items-center gap-2.5 px-1 pb-1">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="var(--accent)" strokeWidth="1.2" aria-hidden>
+            <path d="M9 1.5 L16.5 9 L9 16.5 L1.5 9 Z" /><path d="M9 5.5 L12.5 9 L9 12.5 L5.5 9 Z" fill="var(--accent)" stroke="none" />
+          </svg>
+          <span className="font-serif text-[22px] leading-none font-semibold tracking-tight">Deso<span className="text-accent italic font-medium">Vault</span></span>
         </div>
         <button onClick={onProjects} title={project}
-          className="flex items-center gap-2 px-2 py-1.5 rounded-[2px] bg-field border border-line hover:border-line2 text-left">
-          <span className="text-micro text-dim tracking-wider">PROJ:</span>
-          <span className="min-w-0 flex-1 truncate text-fg">{projectLabel(project)}</span>
-          <ChevronsUpDown size={12} className="text-dim shrink-0" />
+          className="btn-press flex items-center gap-2.5 px-3 py-2 rounded-xl bg-field border border-line hover:border-line2 text-left">
+          <span className="min-w-0 flex-1">
+            <span className="block text-[10.5px] text-dim leading-tight">{t('project')}</span>
+            <span className="block truncate text-fg">{projectLabel(project)}</span>
+          </span>
+          <ChevronsUpDown size={14} className="text-dim shrink-0" />
         </button>
-        {creating ? (
-          <div className="flex flex-col gap-1">
-            <input autoFocus value={name} onChange={(e) => { setName(e.target.value); setErr('') }} placeholder={t('noteName')}
-              onKeyDown={(e) => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') { setCreating(false); setErr('') } }}
-              onBlur={() => !name && setCreating(false)}
-              className="px-2 py-1.5 rounded-[2px] bg-field border border-accent outline-none text-xs placeholder:text-dim" />
-            {err && <span className="px-0.5 text-micro text-status-err">{err}</span>}
-          </div>
-        ) : (
-          <button onClick={() => setCreating(true)}
-            className="flex items-center gap-2 px-2 py-1.5 rounded-[2px] border border-line bg-field hover:border-accent text-micro uppercase tracking-wider text-fg">
-            <Plus size={12} />{t('newNote')}<kbd className="ml-auto">CTRL+N</kbd>
-          </button>
-        )}
-        <div className="flex items-center gap-2 px-2 py-1.5 rounded-[2px] bg-field border border-line focus-within:border-line2">
-          <Search size={12} className="text-dim" />
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-field border border-line focus-within:border-accent">
+          <Search size={14} className="text-dim shrink-0" />
           <input ref={search} value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('search')}
             onKeyDown={(e) => { if (e.key === 'Enter' && shown[0]) { onSelect(shown[0].name); setQ('') } }}
             className="flex-1 min-w-0 bg-transparent outline-none placeholder:text-dim" />
+          <kbd>Ctrl K</kbd>
         </div>
         {allTags.length > 0 && (
-          <div className="flex flex-wrap gap-x-2.5 gap-y-0.5 px-0.5">
+          <div className="flex flex-wrap gap-1.5">
             {allTags.map((x) => (
               <button key={x} onClick={() => setTag(tag === x ? '' : x)}
-                className={`text-micro ${tag === x ? 'underline text-accent font-medium' : 'text-dim hover:text-mut'}`}>#{x}</button>
+                className={`btn-press px-2 py-0.5 rounded-full text-micro border ${tag === x ? 'border-accent text-accent bg-accent-dim' : 'border-line text-dim hover:text-mut hover:border-line2'}`}>#{x}</button>
             ))}
           </div>
         )}
       </div>
 
-      <ul className="flex-1 overflow-auto border-t border-line py-1">
+      <div className="flex items-center justify-between px-5 pt-2 pb-1.5">
+        <span className="text-micro text-dim">{t('notes')}</span>
+        <button onClick={() => setCreating(true)} title={`${t('newNote')} (Ctrl N)`}
+          className="btn-press p-1 rounded-md text-dim hover:text-accent hover:bg-panel"><Plus size={15} /></button>
+      </div>
+      {creating && (
+        <div className="anim-rise px-3 pb-2 flex flex-col gap-1">
+          <input autoFocus value={name} onChange={(e) => { setName(e.target.value); setErr('') }} placeholder={t('noteName')}
+            onKeyDown={(e) => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') { setCreating(false); setErr('') } }}
+            onBlur={() => !name && setCreating(false)}
+            className="px-3 py-2 rounded-xl bg-field border border-accent outline-none placeholder:text-dim" />
+          {err && <span className="px-1 text-micro text-status-err">{err}</span>}
+        </div>
+      )}
+      <ul className="flex-1 overflow-auto px-2 pb-2 flex flex-col gap-px">
         {shown.map((n, i) => {
           const on = n.name === current
+          const c = links(n.content).length
           return (
-            <li key={n.name}>
+            <li key={n.name} className="anim-rise" style={{ animationDelay: `${Math.min(i, 20) * 18}ms` }}>
               <button onClick={() => onSelect(n.name)}
                 onContextMenu={(e) => onMenu(e, [{ label: t('copyLink'), onClick: () => onCopy(n.name) }, { label: t('deleteNote'), danger: true, onClick: () => onDelete(n.name) }])}
-                className={`w-full flex items-center gap-2 pl-2 pr-3 py-1 border-l-2 ${on ? 'bg-panel border-accent text-fg font-medium' : 'border-transparent text-mut hover:bg-panel hover:text-fg'}`}>
-                <span className="text-dim text-micro tabular-nums w-5 text-right select-none">{String(i + 1).padStart(2, '0')}</span>
-                <span className="font-mono text-xs truncate flex-1 text-left">{n.name}</span>
-                <span title={t('connections')} className="text-dim text-micro tabular-nums">{links(n.content).length || ''}</span>
+                className={`group w-full flex items-center gap-3 px-3 py-[7px] rounded-lg ${on ? 'bg-panel text-fg' : 'text-mut hover:bg-panel/60 hover:text-fg'}`}>
+                <span data-ease className={`w-1.5 h-1.5 rounded-full shrink-0 ${on ? 'bg-accent scale-100' : 'bg-line2 scale-75 group-hover:bg-dim'}`} />
+                <span className="truncate flex-1 text-left">{n.name}</span>
+                {c > 0 && <span title={t('connections')} className="text-micro text-dim tabular-nums">{c}</span>}
               </button>
             </li>
           )
         })}
       </ul>
-      <div className="flex items-center gap-2 pl-3 pr-2 py-2 border-t border-line text-micro text-dim tabular-nums">
-        <span>REC: {notes.length} · TOK: {total.d} / {total.m}</span>
-        {onRescan && <button onClick={onRescan} title={t('rescan')} className="ml-auto p-1 rounded-[2px] text-dim hover:text-fg"><RefreshCw size={12} /></button>}
+      <div className="flex items-center gap-2 px-5 py-3 border-t border-line text-micro text-dim tabular-nums">
+        <span>{t('notesTok', { n: notes.length, k: total.d })}</span>
+        {onRescan && <button onClick={onRescan} title={t('rescan')} className="btn-press ml-auto p-1 rounded-md hover:text-fg hover:bg-panel"><RefreshCw size={13} /></button>}
       </div>
     </aside>
   )

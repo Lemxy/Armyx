@@ -8,41 +8,48 @@ export default function TokenInspector({ note, scanned }: { note: Note; scanned:
   const { t: tr } = useI18n()
   const s = savings(note.content)
   const { md, kinds } = toMarkdown(note.content)
+  const stat = 'text-micro text-dim tabular-nums'
   return (
-    <div className="h-full flex flex-col pt-5 pb-4 px-6 gap-5 overflow-auto font-mono">
-      {scanned && (
-        <div className="flex flex-col gap-1.5">
-          <span className="text-6xl font-mono text-accent font-light tracking-tight tabular-nums">−{mapPct(scanned)}%</span>
-          <span className="text-micro uppercase tracking-wider text-dim tabular-nums">MAP {scanned.map} TOK vs SRC {scanned.src} TOK → Δ {scanned.src - scanned.map} TOK {tr('tiSaved')}</span>
+    <div className="h-full flex flex-col pt-8 pb-6 px-8 gap-8 overflow-auto">
+      <div className="flex items-end gap-12 flex-wrap anim-rise">
+        {scanned && (
+          <div className="flex flex-col gap-2">
+            <span className="font-serif text-display font-medium text-accent tabular-nums">−{mapPct(scanned)}%</span>
+            <span className={stat}>map {scanned.map} vs source {scanned.src} tok · {scanned.src - scanned.map} {tr('tiSaved')}</span>
+          </div>
+        )}
+        <div className="flex flex-col gap-2">
+          <span className={`font-serif font-medium tabular-nums ${scanned ? 'text-[36px] leading-none text-mut' : 'text-display text-accent'}`}>−{s.pct}%</span>
+          <span className={stat}>.deso {s.d} vs .md {s.m} tok · {s.m - s.d} {tr('tiSaved')}</span>
         </div>
-      )}
-      <div className="flex flex-col gap-1.5">
-        <span className={`font-mono tracking-tight tabular-nums ${scanned ? 'text-lg text-mut' : 'text-6xl text-accent font-light'}`}>−{s.pct}%</span>
-        <span className="text-micro uppercase tracking-wider text-dim tabular-nums">.deso {s.d} TOK vs .md {s.m} TOK → Δ {s.m - s.d} TOK {tr('tiSaved')}</span>
       </div>
-      <table className="text-xs w-full max-w-2xl tabular-nums">
-        <thead className="text-dim text-micro uppercase tracking-wider text-right"><tr className="border-b border-line2"><th className="py-1 font-medium text-left">{tr('tiConstruct')}</th><th className="font-medium">.deso</th><th className="font-medium">.md</th><th className="font-medium">{tr('savedCol')}</th><th className="w-32" /></tr></thead>
-        <tbody>
-          {Object.entries(kinds).map(([k, v]) => {
-            const max = Math.max(v.d, v.m, 1)
-            return (
-              <tr key={k} className="border-b border-line text-right">
-                <td className="py-1.5 text-mut text-left">{k}</td><td>{v.d}</td><td>{v.m}</td>
-                <td className={v.m >= v.d ? 'text-fg' : 'text-status-err'}>{v.m - v.d}</td>
-                <td className="pl-3">
-                  <div className="h-[3px] bg-accent" title={`.deso ${v.d}`} style={{ width: `${(v.d / max) * 100}%` }} />
-                  <div className="h-[3px] mt-0.5 bg-line2" title={`.md ${v.m}`} style={{ width: `${(v.m / max) * 100}%` }} />
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-      <div className="grid grid-cols-2 gap-px bg-line border border-line flex-1 min-h-0 text-xs">
-        {[['[SECTION A: NANOMARK .DESO]', note.content, 'text-fg'], ['[SECTION B: OBSIDIAN .MD]', md, 'text-mut']].map(([h, t, c]) => (
-          <section key={h} className="bg-surface flex flex-col min-h-0 overflow-hidden">
-            <header className="px-3 py-1.5 bg-panel border-b border-line text-micro tracking-wider text-mut">{h} <span className="text-dim">· {t.length} bytes</span></header>
-            <pre className={`p-3 font-mono overflow-auto whitespace-pre-wrap ${c}`}>{t}</pre>
+      <div className="max-w-2xl rounded-2xl border border-line bg-surface px-5 py-3 anim-rise" style={{ animationDelay: '60ms' }}>
+        <table className="text-sm w-full tabular-nums">
+          <thead className="text-dim text-micro text-right"><tr><th className="py-2 font-normal text-left">{tr('tiConstruct')}</th><th className="font-normal">.deso</th><th className="font-normal">.md</th><th className="font-normal">{tr('savedCol')}</th><th className="w-36" /></tr></thead>
+          <tbody>
+            {Object.entries(kinds).map(([k, v]) => {
+              const max = Math.max(v.d, v.m, 1)
+              return (
+                <tr key={k} className="border-t border-line text-right">
+                  <td className="py-2.5 text-mut text-left capitalize">{k}</td><td>{v.d}</td><td className="text-mut">{v.m}</td>
+                  <td className={v.m >= v.d ? 'text-accent' : 'text-status-err'}>{v.m - v.d}</td>
+                  <td className="pl-4">
+                    <div className="h-1 rounded-full bg-accent" title={`.deso ${v.d}`} style={{ width: `${(v.d / max) * 100}%`, transition: 'width .6s var(--ease)' }} />
+                    <div className="h-1 mt-1 rounded-full bg-line2" title={`.md ${v.m}`} style={{ width: `${(v.m / max) * 100}%`, transition: 'width .6s var(--ease)' }} />
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="grid grid-cols-2 gap-4 flex-1 min-h-[14rem] anim-rise" style={{ animationDelay: '120ms' }}>
+        {[['Nanomark', '.deso', note.content, 'text-fg'], ['Obsidian', '.md', md, 'text-mut']].map(([h, ext, t, c]) => (
+          <section key={h} className="rounded-2xl border border-line bg-surface flex flex-col min-h-0 overflow-hidden">
+            <header className="px-5 pt-4 pb-2 flex items-baseline gap-2">
+              <span className="font-serif text-lg font-semibold">{h}</span><span className="text-micro text-dim">{ext} · {t.length} bytes</span>
+            </header>
+            <pre className={`px-5 pb-5 font-mono text-[12px] leading-5 overflow-auto whitespace-pre-wrap ${c}`}>{t}</pre>
           </section>
         ))}
       </div>

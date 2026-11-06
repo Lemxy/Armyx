@@ -33,6 +33,9 @@ const en = {
   selectFamily: 'Select note + linked', onlyFamily: 'Show only this family', hideFamily: 'Hide linked notes', hideNote: 'Hide note',
   onlySelected: 'Show only selected ({n})', hideSelected: 'Hide selected ({n})', clearSel: 'Clear selection', showAll: 'Show all ({n} hidden)',
   legendOut: 'links to', legendIn: 'linked from', ctrlHint: 'Ctrl+click — select · drag — move', selected: 'selected', fitView: 'Fit to screen',
+  markColor: 'Colour mark', clearMark: 'Remove mark', legendHint: 'Hover a note: each neighbour and its link share a colour. Arrow points to the linked note.',
+  project: 'Project', theme: 'Theme', dark: 'Dark', light: 'Light', you: 'You', tokSaved: 'saved', notesTok: '{n} notes · {k} tokens',
+  focusZoom: 'Zoom to this family',
   savedCol: 'Saved', tiSaved: 'tokens saved', tiEstimate: 'Token counts are a heuristic estimate, not an exact model tokenizer.', tiConstruct: 'Construct',
 }
 
@@ -67,6 +70,9 @@ const ru: Record<keyof typeof en, string> = {
   selectFamily: 'Выделить заметку и связи', onlyFamily: 'Показать только семейство', hideFamily: 'Скрыть связанные', hideNote: 'Скрыть заметку',
   onlySelected: 'Показать только выделенные ({n})', hideSelected: 'Скрыть выделенные ({n})', clearSel: 'Снять выделение', showAll: 'Показать все (скрыто: {n})',
   legendOut: 'ссылается на', legendIn: 'ссылаются сюда', ctrlHint: 'Ctrl+клик — выделить · тянуть — двигать', selected: 'выделено', fitView: 'Вписать в экран',
+  markColor: 'Цветная метка', clearMark: 'Убрать метку', legendHint: 'Наведите на заметку: каждый сосед и его связь окрашены одним цветом. Стрелка указывает на заметку, на которую ссылаются.',
+  project: 'Проект', theme: 'Тема', dark: 'Тёмная', light: 'Светлая', you: 'Вы', tokSaved: 'экономия', notesTok: '{n} заметок · {k} токенов',
+  focusZoom: 'Приблизить семейство',
   savedCol: 'Экономия', tiSaved: 'токенов сэкономлено', tiEstimate: 'Подсчёт токенов — эвристическая оценка, а не точный токенизатор модели.', tiConstruct: 'Конструкция',
 }
 

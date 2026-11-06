@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { Bot, Check, ChevronDown, Clock, Copy, CornerDownLeft, Plus, Send, Trash2, X } from 'lucide-react'
+import { ArrowUp, Check, ChevronDown, Clock, Copy, CornerDownLeft, Plus, Sparkles, Trash2, X } from 'lucide-react'
+import Segmented from './Segmented'
 import Markdown from './Markdown'
 import { useI18n } from '../i18n'
 import { graphMap, MAP_INTRO, tokens, type Note } from '../deso'
@@ -93,15 +94,15 @@ function Assistant({ label, m, fresh, canInsert, onInsert, onTick }: { label: st
   const [copied, setCopied] = useState(false)
   useEffect(() => { onTick() }, [shown]) // keep the view pinned to the bottom while typing
   return (
-    <div className="flex flex-col gap-1.5" onClick={typing ? skip : undefined}>
-      <span className="font-mono text-micro tracking-widest text-mut uppercase">AGENT: {label} // SYSTEM-LINK</span>
-      {m.error ? <p className="text-xs text-status-err font-mono whitespace-pre-wrap">{m.text}</p> : <Markdown text={shown} />}
-      {typing && <span className="inline-block w-1.5 h-3.5 bg-accent animate-pulse" />}
+    <div className="flex flex-col gap-2 anim-rise" onClick={typing ? skip : undefined}>
+      <span className="flex items-center gap-1.5 text-micro text-accent"><Sparkles size={11} />{label}</span>
+      {m.error ? <p className="text-sm text-status-err whitespace-pre-wrap">{m.text}</p> : <Markdown text={shown} />}
+      {typing && <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />}
       {!typing && !m.error && (
-        <div className="flex items-center gap-1 text-micro text-dim font-mono">
+        <div className="flex items-center gap-1 text-micro text-dim">
           <button onClick={() => { navigator.clipboard.writeText(m.text).catch(console.error); setCopied(true); setTimeout(() => setCopied(false), 1200) }}
-            className="flex items-center gap-1 px-1.5 py-0.5 rounded-[2px] hover:text-fg hover:bg-panel">{copied ? <Check size={12} /> : <Copy size={12} />}{t('copy')}</button>
-          <button onClick={onInsert} disabled={!canInsert} className="flex items-center gap-1 px-1.5 py-0.5 rounded-[2px] hover:text-fg hover:bg-panel disabled:opacity-40"><CornerDownLeft size={12} />{t('insert')}</button>
+            className="flex items-center gap-1 px-2 py-1 rounded-md hover:text-fg hover:bg-panel">{copied ? <Check size={12} /> : <Copy size={12} />}{t('copy')}</button>
+          <button onClick={onInsert} disabled={!canInsert} className="flex items-center gap-1 px-2 py-1 rounded-md hover:text-fg hover:bg-panel disabled:opacity-40"><CornerDownLeft size={12} />{t('insert')}</button>
           {m.tin != null && <span className="ml-auto">{m.tin} {t('tokIn')} · {m.tout} {t('tokOut')}</span>}
         </div>
       )}
@@ -179,31 +180,28 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
   const scroll = () => end.current?.scrollIntoView({ block: 'end' })
   useEffect(() => { scroll() }, [msgs.length, busy])
 
-  const seg = (on: boolean) => `flex-1 py-1 text-xs border-b-2 ${on ? 'border-accent text-fg bg-panel' : 'border-transparent text-dim hover:text-mut'}`
-  const group = 'flex border border-line bg-field rounded-[2px]'
-  const label = 'text-micro font-mono uppercase tracking-wider text-dim'
-  const icon = 'p-1.5 rounded-[2px] text-dim hover:text-fg hover:bg-panel'
+  const label = 'text-micro text-dim'
+  const icon = 'btn-press p-1.5 rounded-lg text-dim hover:text-fg hover:bg-panel'
   const effortName = effortFixed ? '' : ` · ${t(EFFORTS[effort][0])}`
 
   return (
-    <aside className="w-[26rem] shrink-0 border-l border-line bg-surface flex flex-col text-xs relative">
-      <div className="flex items-center gap-1 px-3 h-11 border-b border-line">
-        <Bot size={14} className="text-mut ml-1" />
-        <span className="font-mono text-micro uppercase tracking-widest text-mut truncate ml-1">{chat?.title ?? t('chatNew')}</span>
-        <span className="ml-auto flex items-center gap-1.5 text-micro font-mono text-dim mr-1"><span className={`w-1.5 h-1.5 rounded-full ${real ? 'bg-status-ok' : 'bg-accent'}`} />{status}</span>
+    <aside className="anim-fade w-[26rem] shrink-0 border-l border-line bg-surface flex flex-col text-sm relative">
+      <div className="flex items-center gap-1 px-4 h-14 border-b border-line">
+        <span className="font-serif text-lg font-semibold truncate">{chat?.title ?? t('chatNew')}</span>
+        <span className="ml-auto flex items-center gap-1.5 text-micro text-dim mr-1 shrink-0"><span className={`w-1.5 h-1.5 rounded-full ${real ? 'bg-status-ok' : 'bg-accent'}`} />{status}</span>
         <button onClick={newChat} title={t('chatNew')} className={icon}><Plus size={15} /></button>
         <button onClick={() => setShowHist((v) => !v)} title={t('history')} className={`${icon} ${showHist ? 'bg-panel text-fg' : ''}`}><Clock size={15} /></button>
         <button onClick={onClose} title={t('close')} className={icon}><X size={15} /></button>
       </div>
 
       {showHist && (
-        <div className="absolute inset-x-0 top-11 bottom-0 z-10 bg-surface overflow-auto p-3 flex flex-col gap-1">
+        <div className="anim-fade absolute inset-x-0 top-14 bottom-0 z-10 bg-surface overflow-auto p-3 flex flex-col gap-1">
           {chats.length === 0 && <p className="text-dim text-xs p-2">{t('historyEmpty')}</p>}
           {chats.map((c) => (
-            <div key={c.id} className={`group flex items-center rounded-[2px] border-l-2 ${c.id === activeId ? 'bg-panel border-accent' : 'border-transparent hover:bg-panel'}`}>
+            <div key={c.id} className={`group flex items-center rounded-xl ${c.id === activeId ? 'bg-panel' : 'hover:bg-panel/60'}`}>
               <button onClick={() => { setActiveId(c.id); setShowHist(false) }} className="flex-1 min-w-0 text-left px-3 py-2">
                 <span className="block truncate">{c.title}</span>
-                <span className="block text-micro font-mono text-dim">{c.msgs.length} · {ago(c.at)}</span>
+                <span className="block text-micro text-dim">{c.msgs.length} · {ago(c.at)}</span>
               </button>
               <button onClick={() => { setChats((cs) => cs.filter((x) => x.id !== c.id)); if (c.id === activeId) setActiveId('') }} title={t('delete')}
                 className="p-2 mr-1 rounded text-dim opacity-0 group-hover:opacity-100 hover:text-status-err"><Trash2 size={14} /></button>
@@ -212,55 +210,54 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
         </div>
       )}
 
-      <button onClick={() => setShowCfg((v) => !v)} className="flex items-center gap-2 px-4 py-1.5 border-b border-line bg-field text-micro font-mono text-dim hover:text-fg text-left">
+      <button onClick={() => setShowCfg((v) => !v)} className="flex items-center gap-2 px-5 py-2.5 border-b border-line text-micro text-dim hover:text-fg text-left">
         <span className="truncate">{a.label} · {mode === 'cli' ? t('modeCli') : t('modeApi')} · {list.find((m) => m[0] === model)?.[1]}{effortName}</span>
-        <ChevronDown size={13} className={`ml-auto shrink-0 transition-transform ${showCfg ? 'rotate-180' : ''}`} />
+        <ChevronDown size={13} data-ease className={`ml-auto shrink-0 ${showCfg ? 'rotate-180' : ''}`} />
       </button>
       {showCfg && (
-        <div className="px-4 pt-3 pb-4 flex flex-col gap-2.5 border-b border-line bg-panel">
-          <label className="flex flex-col gap-1"><span className={label}>Agent</span><div className={group}>{(Object.keys(AGENTS) as Id[]).map((k) => <button key={k} onClick={() => set({ id: k })} className={seg(id === k)}>{AGENTS[k].label}</button>)}</div></label>
-          <label className="flex flex-col gap-1"><span className={label}>Mode</span><div className={group}>{(['cli', 'api'] as Mode[]).map((m) => <button key={m} onClick={() => set({ modes: { ...modes, [id]: m } })} className={seg(mode === m)}>{m === 'cli' ? t('modeCli') : t('modeApi')}</button>)}</div></label>
+        <div className="anim-rise px-5 pt-3 pb-5 flex flex-col gap-3.5 border-b border-line">
+          <div className="flex flex-col gap-1.5"><span className={label}>Agent</span><Segmented<Id> value={id} onChange={(k) => set({ id: k })} options={(Object.keys(AGENTS) as Id[]).map((k) => [k, AGENTS[k].label] as const)} /></div>
+          <div className="flex flex-col gap-1.5"><span className={label}>Mode</span><Segmented<Mode> value={mode} onChange={(m) => set({ modes: { ...modes, [id]: m } })} options={[['cli', t('modeCli')], ['api', t('modeApi')]]} /></div>
           {mode === 'api' && <input type="password" value={key} onChange={(e) => setKeys((s) => ({ ...s, [id]: e.target.value }))} placeholder={a.key}
-            className="px-2.5 py-1.5 rounded-[2px] bg-field border border-line focus:border-accent outline-none text-xs font-mono placeholder:text-dim" />}
+            className="px-3.5 py-2 rounded-xl bg-field border border-line focus:border-accent outline-none text-sm placeholder:text-dim" />}
           <label className="flex flex-col gap-1.5"><span className={label}>{t('model')}</span>
             <select value={model} onChange={(e) => set({ models: { ...cfg.models, [id]: e.target.value } })}
-              className="px-2.5 py-1.5 rounded-[2px] bg-field border border-line focus:border-accent outline-none text-xs font-mono text-fg">
+              className="px-3.5 py-2 rounded-xl bg-field border border-line focus:border-accent outline-none text-sm text-fg">
               {list.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
           </label>
           <div className="flex flex-col gap-1.5">
             <span className={label}>{t('reasoning')}</span>
             {effortFixed
-              ? <p className="px-2.5 py-1.5 rounded-[2px] bg-field border border-line text-micro leading-relaxed text-dim">{t('effortInName')}</p>
-              : <div className={group}>{EFFORTS.map(([k], i) => <button key={k} onClick={() => set({ effort: i })} className={seg(effort === i)}>{t(k)}</button>)}</div>}
+              ? <p className="px-3.5 py-2.5 rounded-xl bg-field border border-line text-micro leading-relaxed text-dim">{t('effortInName')}</p>
+              : <Segmented value={String(effort)} onChange={(v) => set({ effort: +v })} options={EFFORTS.map(([k], i) => [String(i), t(k)] as const)} />}
           </div>
         </div>
       )}
 
-      <div className="flex-1 overflow-auto px-4 pt-4 pb-3 flex flex-col gap-5">
+      <div className="flex-1 overflow-auto px-5 pt-5 pb-3 flex flex-col gap-6">
         {msgs.length === 0 && (
-          <p className="m-auto text-micro font-mono text-dim max-w-[16rem] leading-relaxed">{t('chatEmpty', { n: notes.length, k: tokens(map) })}</p>
+          <p className="m-auto text-center text-dim max-w-[17rem] leading-relaxed">{t('chatEmpty', { n: notes.length, k: tokens(map) })}</p>
         )}
         {msgs.map((m, i) => m.role === 'user'
-          ? <div key={m.at} className="flex flex-col gap-1.5">
-            <span className="font-mono text-micro tracking-widest text-accent uppercase">YOU // {new Date(m.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-            <p className="whitespace-pre-wrap text-sm font-sans">{m.text}</p>
+          ? <div key={m.at} className="anim-rise self-end max-w-[85%] flex flex-col items-end gap-1">
+            <p className="whitespace-pre-wrap px-4 py-2.5 rounded-2xl rounded-br-md bg-panel border border-line">{m.text}</p>
+            <span className="text-micro text-dim">{new Date(m.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
           </div>
-          : <Assistant key={m.at} label={a.label.toUpperCase()} m={m} fresh={m.at === freshAt && i === msgs.length - 1} canInsert={!!note} onTick={scroll} onInsert={() => onInsert(m.text)} />)}
-        {busy && <span className="text-micro font-mono text-dim animate-pulse">{t('thinking')}</span>}
+          : <Assistant key={m.at} label={a.label} m={m} fresh={m.at === freshAt && i === msgs.length - 1} canInsert={!!note} onTick={scroll} onInsert={() => onInsert(m.text)} />)}
+        {busy && <span className="anim-fade text-micro text-dim animate-pulse">{t('thinking')}</span>}
         <div ref={end} />
       </div>
 
-      <div className="px-3 pt-2.5 pb-2 border-t border-line">
-        <div className="flex items-end gap-2 p-2 rounded-[2px] bg-field border border-line focus-within:border-accent">
-          <span className="font-mono text-accent select-none pb-px">&gt;</span>
+      <div className="px-4 pt-3 pb-3">
+        <div className="flex items-end gap-2 pl-4 pr-2 py-2 rounded-2xl bg-field border border-line focus-within:border-accent focus-within:shadow-float">
           <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={2} spellCheck={false} placeholder={t('promptPh')}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
-            className="flex-1 min-w-0 bg-transparent outline-none resize-none font-mono text-xs placeholder:text-dim max-h-40" />
+            className="flex-1 min-w-0 py-1 bg-transparent outline-none resize-none text-sm placeholder:text-dim max-h-40" />
           <button onClick={send} disabled={busy || !prompt.trim()} title={t('send')}
-            className="p-1.5 rounded-[2px] border border-line2 text-accent hover:border-accent disabled:opacity-30"><Send size={14} /></button>
+            className="btn-press p-2 rounded-full bg-accent text-bg hover:opacity-90 disabled:opacity-25"><ArrowUp size={15} /></button>
         </div>
-        <p className="mt-1.5 px-0.5 text-micro font-mono text-dim">{t('sendHint')}</p>
+        <p className="mt-2 px-1 text-micro text-dim">{t('sendHint')}</p>
       </div>
     </aside>
   )

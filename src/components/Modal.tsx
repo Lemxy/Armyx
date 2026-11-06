@@ -10,14 +10,14 @@ export default function Modal({ title, onClose, children }: { title: string; onC
     return () => window.removeEventListener('keydown', k)
   }, [onClose])
   return (
-    <div onMouseDown={onClose} className="anim-fade fixed inset-0 z-50 flex items-center justify-center bg-bg/80">
+    <div onMouseDown={onClose} className="anim-fade fixed inset-0 z-50 flex items-center justify-center bg-bg/70 backdrop-blur-sm">
       <div onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label={title}
-        className="anim-pop w-[26rem] max-w-[92%] max-h-[85%] overflow-auto rounded-[2px] bg-panel border border-line text-xs">
-        <div className="flex items-center px-3 h-9 border-b border-line bg-surface">
-          <span className="font-mono text-micro uppercase tracking-widest text-mut">{title}</span>
-          <button onClick={onClose} title={t('close')} className="ml-auto p-1 rounded-[2px] text-dim hover:text-fg"><X size={13} /></button>
+        className="anim-pop w-[28rem] max-w-[92%] max-h-[85%] overflow-auto rounded-2xl bg-surface border border-line shadow-float text-sm">
+        <div className="flex items-center px-6 pt-5 pb-1">
+          <span className="font-serif text-title font-semibold">{title}</span>
+          <button onClick={onClose} title={t('close')} className="ml-auto p-1.5 rounded-lg text-dim hover:text-fg hover:bg-panel"><X size={16} /></button>
         </div>
-        <div className="px-4 pt-3.5 pb-4 flex flex-col gap-3.5">{children}</div>
+        <div className="px-6 pt-3 pb-6 flex flex-col gap-5">{children}</div>
       </div>
     </div>
   )
