@@ -1,0 +1,6 @@
+# DMA-CONTROLLER
+#hw #dma
+?status:draft
+!channels 8
+Bulk copy engine without CPU. Fed by @memory-bus.
+-scatter-gather lists

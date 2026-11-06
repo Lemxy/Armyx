@@ -1,0 +1,10 @@
+# API-GATEWAY
+#net #edge
+?status:active
+!port 8080
+!tls 1.3
+Public edge. Syscall bridge to @kernel-arch, every request checked by @auth-subsystem.
++rate limiting
+-websocket proxy
+-grpc support
+

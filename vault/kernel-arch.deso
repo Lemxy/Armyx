@@ -1,0 +1,13 @@
+# KERNEL-ARCH
+#core #kernel #ring0
+?status:active
+?owner:ring0
+!arch x86_64
+!sched CFS-lite
+!page 4096
+Monolithic core. Talks to hardware via @memory-bus, every syscall gated by @auth-subsystem.
+Exposed to userland through ->@api-gateway.
++boot sequence stable
++syscall table frozen
+-smp hotplug
+-live patching

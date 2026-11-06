@@ -1,0 +1,10 @@
+# AUTH-SUBSYSTEM
+#security #auth
+?status:review
+?owner:sec-team
+!tokenttl 900s
+!hash argon2id
+Issues and validates capability tokens. Keys live in @crypto-vault, edge enforcement in @api-gateway.
++token rotation
++argon2 migration
+-hardware key support

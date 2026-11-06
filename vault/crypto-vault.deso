@@ -1,0 +1,9 @@
+# CRYPTO-VAULT
+#security #crypto
+?status:active
+?audit:2026-q3
+!cipher xchacha20
+!kdf argon2id
+Sealed key storage. Sole client: @auth-subsystem.
++key sealing
+-HSM backendа

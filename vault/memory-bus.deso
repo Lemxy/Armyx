@@ -1,0 +1,9 @@
+# MEMORY-BUS
+#hw #memory
+?status:active
+?latency:low
+!width 64bit
+!clock 3200MHz
+Arbitrates RAM access. Bulk transfers delegated to @dma-controller. Owned by @kernel-arch.
++arbiter round-robin
+-ECC scrubbing

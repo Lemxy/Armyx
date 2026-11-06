@@ -1,0 +1,5 @@
+[
+  { "q": "Which file implements the GPU renderer for streamed terrain sections, sky, block outline and HUD? Reply with the repo-relative path only.", "expect": "crates/horizon-client/src/gfx.rs" },
+  { "q": "Which file holds the command execution (the `execute` side of each vanilla command class)? Reply with the repo-relative path only.", "expect": "crates/horizon-client/src/game/commands.rs" },
+  { "q": "Which crate's lib.rs decodes resources of the pinned Java Edition client (models, blockstates, palettes)? Reply with the repo-relative path only.", "expect": "crates/horizon-assets/src/lib.rs" }
+]
