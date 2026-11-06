@@ -30,6 +30,9 @@ const en = {
   projFilesStay: 'Files stay on disk.', cancel: 'Cancel', delete: 'Delete', deleteTitle: 'Delete note',
   noteName: 'note-name', noteBad: 'Use a-z, 0-9, - and _ only.', noteExists: 'A note with this name already exists.', noteCreate: 'Create',
   emptyTitle: 'Nothing here yet', emptySub: 'Create your first note to start the graph.', createFirst: 'Create first note',
+  selectFamily: 'Select note + linked', onlyFamily: 'Show only this family', hideFamily: 'Hide linked notes', hideNote: 'Hide note',
+  onlySelected: 'Show only selected ({n})', hideSelected: 'Hide selected ({n})', clearSel: 'Clear selection', showAll: 'Show all ({n} hidden)',
+  legendOut: 'links to', legendIn: 'linked from', ctrlHint: 'Ctrl+click — select · drag — move', selected: 'selected', fitView: 'Fit to screen',
   savedCol: 'Saved', tiSaved: 'tokens saved', tiEstimate: 'Token counts are a heuristic estimate, not an exact model tokenizer.', tiConstruct: 'Construct',
 }
 
@@ -61,6 +64,9 @@ const ru: Record<keyof typeof en, string> = {
   projFilesStay: 'Файлы остаются на диске.', cancel: 'Отмена', delete: 'Удалить', deleteTitle: 'Удалить заметку',
   noteName: 'имя-заметки', noteBad: 'Только a-z, 0-9, - и _.', noteExists: 'Заметка с таким именем уже есть.', noteCreate: 'Создать',
   emptyTitle: 'Здесь пока пусто', emptySub: 'Создайте первую заметку, чтобы начать граф.', createFirst: 'Создать первую заметку',
+  selectFamily: 'Выделить заметку и связи', onlyFamily: 'Показать только семейство', hideFamily: 'Скрыть связанные', hideNote: 'Скрыть заметку',
+  onlySelected: 'Показать только выделенные ({n})', hideSelected: 'Скрыть выделенные ({n})', clearSel: 'Снять выделение', showAll: 'Показать все (скрыто: {n})',
+  legendOut: 'ссылается на', legendIn: 'ссылаются сюда', ctrlHint: 'Ctrl+клик — выделить · тянуть — двигать', selected: 'выделено', fitView: 'Вписать в экран',
   savedCol: 'Экономия', tiSaved: 'токенов сэкономлено', tiEstimate: 'Подсчёт токенов — эвристическая оценка, а не точный токенизатор модели.', tiConstruct: 'Конструкция',
 }
 

@@ -87,20 +87,21 @@ function useTypewriter(text: string, on: boolean) {
   return { shown: text.slice(0, n), typing: n < text.length, skip: () => setN(text.length) }
 }
 
-function Assistant({ m, fresh, canInsert, onInsert, onTick }: { m: Msg; fresh: boolean; canInsert: boolean; onInsert: () => void; onTick: () => void }) {
+function Assistant({ label, m, fresh, canInsert, onInsert, onTick }: { label: string; m: Msg; fresh: boolean; canInsert: boolean; onInsert: () => void; onTick: () => void }) {
   const { t } = useI18n()
   const { shown, typing, skip } = useTypewriter(m.text, fresh && !m.error)
   const [copied, setCopied] = useState(false)
   useEffect(() => { onTick() }, [shown]) // keep the view pinned to the bottom while typing
   return (
     <div className="flex flex-col gap-1.5" onClick={typing ? skip : undefined}>
-      {m.error ? <p className="text-xs text-rose-300 whitespace-pre-wrap">{m.text}</p> : <Markdown text={shown} />}
-      {typing && <span className="inline-block w-1.5 h-3.5 bg-fg/70 animate-pulse" />}
+      <span className="font-mono text-micro tracking-widest text-mut uppercase">AGENT: {label} // SYSTEM-LINK</span>
+      {m.error ? <p className="text-xs text-status-err font-mono whitespace-pre-wrap">{m.text}</p> : <Markdown text={shown} />}
+      {typing && <span className="inline-block w-1.5 h-3.5 bg-accent animate-pulse" />}
       {!typing && !m.error && (
-        <div className="flex items-center gap-1 text-[11px] text-dim">
+        <div className="flex items-center gap-1 text-micro text-dim font-mono">
           <button onClick={() => { navigator.clipboard.writeText(m.text).catch(console.error); setCopied(true); setTimeout(() => setCopied(false), 1200) }}
-            className="flex items-center gap-1 px-1.5 py-0.5 rounded hover:text-fg hover:bg-panel">{copied ? <Check size={12} /> : <Copy size={12} />}{t('copy')}</button>
-          <button onClick={onInsert} disabled={!canInsert} className="flex items-center gap-1 px-1.5 py-0.5 rounded hover:text-fg hover:bg-panel disabled:opacity-40"><CornerDownLeft size={12} />{t('insert')}</button>
+            className="flex items-center gap-1 px-1.5 py-0.5 rounded-[2px] hover:text-fg hover:bg-panel">{copied ? <Check size={12} /> : <Copy size={12} />}{t('copy')}</button>
+          <button onClick={onInsert} disabled={!canInsert} className="flex items-center gap-1 px-1.5 py-0.5 rounded-[2px] hover:text-fg hover:bg-panel disabled:opacity-40"><CornerDownLeft size={12} />{t('insert')}</button>
           {m.tin != null && <span className="ml-auto">{m.tin} {t('tokIn')} · {m.tout} {t('tokOut')}</span>}
         </div>
       )}
@@ -178,84 +179,88 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
   const scroll = () => end.current?.scrollIntoView({ block: 'end' })
   useEffect(() => { scroll() }, [msgs.length, busy])
 
-  const seg = (on: boolean) => `flex-1 py-1.5 rounded-md text-xs font-medium ${on ? 'bg-panel text-fg' : 'text-dim hover:text-fg'}`
-  const group = 'flex gap-1 p-1 rounded-lg bg-bg border border-line'
-  const label = 'text-[10px] font-semibold uppercase tracking-wider text-dim'
-  const icon = 'p-1.5 rounded-md text-dim hover:text-fg hover:bg-panel'
+  const seg = (on: boolean) => `flex-1 py-1 text-xs border-b-2 ${on ? 'border-accent text-fg bg-panel' : 'border-transparent text-dim hover:text-mut'}`
+  const group = 'flex border border-line bg-field rounded-[2px]'
+  const label = 'text-micro font-mono uppercase tracking-wider text-dim'
+  const icon = 'p-1.5 rounded-[2px] text-dim hover:text-fg hover:bg-panel'
   const effortName = effortFixed ? '' : ` · ${t(EFFORTS[effort][0])}`
 
   return (
-    <aside className="w-[26rem] shrink-0 border-l border-line bg-surface flex flex-col text-[13px] relative">
-      <div className="flex items-center gap-1 px-3 h-12 border-b border-line">
-        <Bot size={15} className="text-mut ml-1" />
-        <span className="font-semibold tracking-tight truncate ml-1">{chat?.title ?? t('chatNew')}</span>
-        <span className="ml-auto flex items-center gap-1.5 text-[11px] text-dim mr-1"><span className={`w-1.5 h-1.5 rounded-full ${real ? 'bg-emerald-400' : 'bg-amber-400'}`} />{status}</span>
+    <aside className="w-[26rem] shrink-0 border-l border-line bg-surface flex flex-col text-xs relative">
+      <div className="flex items-center gap-1 px-3 h-11 border-b border-line">
+        <Bot size={14} className="text-mut ml-1" />
+        <span className="font-mono text-micro uppercase tracking-widest text-mut truncate ml-1">{chat?.title ?? t('chatNew')}</span>
+        <span className="ml-auto flex items-center gap-1.5 text-micro font-mono text-dim mr-1"><span className={`w-1.5 h-1.5 rounded-full ${real ? 'bg-status-ok' : 'bg-accent'}`} />{status}</span>
         <button onClick={newChat} title={t('chatNew')} className={icon}><Plus size={15} /></button>
         <button onClick={() => setShowHist((v) => !v)} title={t('history')} className={`${icon} ${showHist ? 'bg-panel text-fg' : ''}`}><Clock size={15} /></button>
         <button onClick={onClose} title={t('close')} className={icon}><X size={15} /></button>
       </div>
 
       {showHist && (
-        <div className="absolute inset-x-0 top-12 bottom-0 z-10 bg-surface overflow-auto p-3 flex flex-col gap-1">
+        <div className="absolute inset-x-0 top-11 bottom-0 z-10 bg-surface overflow-auto p-3 flex flex-col gap-1">
           {chats.length === 0 && <p className="text-dim text-xs p-2">{t('historyEmpty')}</p>}
           {chats.map((c) => (
-            <div key={c.id} className={`group flex items-center rounded-lg border ${c.id === activeId ? 'bg-panel border-line2' : 'border-transparent hover:bg-panel/60'}`}>
+            <div key={c.id} className={`group flex items-center rounded-[2px] border-l-2 ${c.id === activeId ? 'bg-panel border-accent' : 'border-transparent hover:bg-panel'}`}>
               <button onClick={() => { setActiveId(c.id); setShowHist(false) }} className="flex-1 min-w-0 text-left px-3 py-2">
                 <span className="block truncate">{c.title}</span>
-                <span className="block text-[11px] text-dim">{c.msgs.length} · {ago(c.at)}</span>
+                <span className="block text-micro font-mono text-dim">{c.msgs.length} · {ago(c.at)}</span>
               </button>
               <button onClick={() => { setChats((cs) => cs.filter((x) => x.id !== c.id)); if (c.id === activeId) setActiveId('') }} title={t('delete')}
-                className="p-2 mr-1 rounded text-dim opacity-0 group-hover:opacity-100 hover:text-rose-300"><Trash2 size={14} /></button>
+                className="p-2 mr-1 rounded text-dim opacity-0 group-hover:opacity-100 hover:text-status-err"><Trash2 size={14} /></button>
             </div>
           ))}
         </div>
       )}
 
-      <button onClick={() => setShowCfg((v) => !v)} className="flex items-center gap-2 px-4 py-2 border-b border-line text-[11px] text-dim hover:text-fg text-left">
+      <button onClick={() => setShowCfg((v) => !v)} className="flex items-center gap-2 px-4 py-1.5 border-b border-line bg-field text-micro font-mono text-dim hover:text-fg text-left">
         <span className="truncate">{a.label} · {mode === 'cli' ? t('modeCli') : t('modeApi')} · {list.find((m) => m[0] === model)?.[1]}{effortName}</span>
         <ChevronDown size={13} className={`ml-auto shrink-0 transition-transform ${showCfg ? 'rotate-180' : ''}`} />
       </button>
       {showCfg && (
-        <div className="p-4 flex flex-col gap-3 border-b border-line">
-          <div className={group}>{(Object.keys(AGENTS) as Id[]).map((k) => <button key={k} onClick={() => set({ id: k })} className={seg(id === k)}>{AGENTS[k].label}</button>)}</div>
-          <div className={group}>{(['cli', 'api'] as Mode[]).map((m) => <button key={m} onClick={() => set({ modes: { ...modes, [id]: m } })} className={seg(mode === m)}>{m === 'cli' ? t('modeCli') : t('modeApi')}</button>)}</div>
+        <div className="px-4 pt-3 pb-4 flex flex-col gap-2.5 border-b border-line bg-panel">
+          <label className="flex flex-col gap-1"><span className={label}>Agent</span><div className={group}>{(Object.keys(AGENTS) as Id[]).map((k) => <button key={k} onClick={() => set({ id: k })} className={seg(id === k)}>{AGENTS[k].label}</button>)}</div></label>
+          <label className="flex flex-col gap-1"><span className={label}>Mode</span><div className={group}>{(['cli', 'api'] as Mode[]).map((m) => <button key={m} onClick={() => set({ modes: { ...modes, [id]: m } })} className={seg(mode === m)}>{m === 'cli' ? t('modeCli') : t('modeApi')}</button>)}</div></label>
           {mode === 'api' && <input type="password" value={key} onChange={(e) => setKeys((s) => ({ ...s, [id]: e.target.value }))} placeholder={a.key}
-            className="px-3 py-2 rounded-lg bg-bg border border-line focus:border-line2 outline-none text-xs placeholder:text-dim" />}
+            className="px-2.5 py-1.5 rounded-[2px] bg-field border border-line focus:border-accent outline-none text-xs font-mono placeholder:text-dim" />}
           <label className="flex flex-col gap-1.5"><span className={label}>{t('model')}</span>
             <select value={model} onChange={(e) => set({ models: { ...cfg.models, [id]: e.target.value } })}
-              className="px-3 py-2 rounded-lg bg-bg border border-line focus:border-line2 outline-none text-xs text-fg">
+              className="px-2.5 py-1.5 rounded-[2px] bg-field border border-line focus:border-accent outline-none text-xs font-mono text-fg">
               {list.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
           </label>
           <div className="flex flex-col gap-1.5">
             <span className={label}>{t('reasoning')}</span>
             {effortFixed
-              ? <p className="px-3 py-2 rounded-lg bg-bg border border-line text-[11px] leading-relaxed text-dim">{t('effortInName')}</p>
+              ? <p className="px-2.5 py-1.5 rounded-[2px] bg-field border border-line text-micro leading-relaxed text-dim">{t('effortInName')}</p>
               : <div className={group}>{EFFORTS.map(([k], i) => <button key={k} onClick={() => set({ effort: i })} className={seg(effort === i)}>{t(k)}</button>)}</div>}
           </div>
         </div>
       )}
 
-      <div className="flex-1 overflow-auto px-4 py-4 flex flex-col gap-5">
+      <div className="flex-1 overflow-auto px-4 pt-4 pb-3 flex flex-col gap-5">
         {msgs.length === 0 && (
-          <p className="m-auto text-center text-xs text-dim max-w-[16rem] leading-relaxed">{t('chatEmpty', { n: notes.length, k: tokens(map) })}</p>
+          <p className="m-auto text-micro font-mono text-dim max-w-[16rem] leading-relaxed">{t('chatEmpty', { n: notes.length, k: tokens(map) })}</p>
         )}
         {msgs.map((m, i) => m.role === 'user'
-          ? <div key={m.at} className="self-end max-w-[85%] px-3 py-2 rounded-lg bg-panel border border-line whitespace-pre-wrap text-[12.5px]">{m.text}</div>
-          : <Assistant key={m.at} m={m} fresh={m.at === freshAt && i === msgs.length - 1} canInsert={!!note} onTick={scroll} onInsert={() => onInsert(m.text)} />)}
-        {busy && <span className="text-xs text-dim animate-pulse">{t('thinking')}</span>}
+          ? <div key={m.at} className="flex flex-col gap-1.5">
+            <span className="font-mono text-micro tracking-widest text-accent uppercase">YOU // {new Date(m.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+            <p className="whitespace-pre-wrap text-sm font-sans">{m.text}</p>
+          </div>
+          : <Assistant key={m.at} label={a.label.toUpperCase()} m={m} fresh={m.at === freshAt && i === msgs.length - 1} canInsert={!!note} onTick={scroll} onInsert={() => onInsert(m.text)} />)}
+        {busy && <span className="text-micro font-mono text-dim animate-pulse">{t('thinking')}</span>}
         <div ref={end} />
       </div>
 
-      <div className="p-3 border-t border-line">
-        <div className="flex items-end gap-2 p-2 rounded-lg bg-bg border border-line focus-within:border-line2">
+      <div className="px-3 pt-2.5 pb-2 border-t border-line">
+        <div className="flex items-end gap-2 p-2 rounded-[2px] bg-field border border-line focus-within:border-accent">
+          <span className="font-mono text-accent select-none pb-px">&gt;</span>
           <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={2} spellCheck={false} placeholder={t('promptPh')}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
-            className="flex-1 min-w-0 bg-transparent outline-none resize-none text-[13px] placeholder:text-dim max-h-40" />
+            className="flex-1 min-w-0 bg-transparent outline-none resize-none font-mono text-xs placeholder:text-dim max-h-40" />
           <button onClick={send} disabled={busy || !prompt.trim()} title={t('send')}
-            className="p-2 rounded-md bg-fg text-bg hover:bg-fg/90 disabled:opacity-30"><Send size={14} /></button>
+            className="p-1.5 rounded-[2px] border border-line2 text-accent hover:border-accent disabled:opacity-30"><Send size={14} /></button>
         </div>
-        <p className="mt-1.5 px-1 text-[10px] text-dim">{t('sendHint')}</p>
+        <p className="mt-1.5 px-0.5 text-micro font-mono text-dim">{t('sendHint')}</p>
       </div>
     </aside>
   )

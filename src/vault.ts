@@ -26,6 +26,15 @@ export const listProjects = (): string[] => {
 }
 
 export async function loadNotes(): Promise<Note[]> {
+  const test = new URLSearchParams(window.location.search).get('notes')
+  if (test === '0') return []
+  if (test === '200') {
+    const id = (i: number) => `node-${String(i).padStart(3, '0')}`
+    return Array.from({ length: 200 }, (_, i) => ({
+      name: id(i + 1),
+      content: `# ${id(i + 1)}\n?type: module\n!clock 4GHz\n+ready\n-pending\n->@${id((i + 1) % 200 + 1)}\n#architecture #hardware\nSystem component log trace ${id(i + 1)}.`,
+    }))
+  }
   if (inTauri) {
     const id = localStorage.getItem(ACTIVE)
     if (id) await call('set_root', { path: id })

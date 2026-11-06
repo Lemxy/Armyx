@@ -26,42 +26,42 @@ export default function ProjectModal({ active, onSwitch, onClose }: Props) {
 
   return (
     <Modal title={t('projTitle')} onClose={onClose}>
-      <ul className="flex flex-col gap-1.5">
+      <ul className="flex flex-col gap-1">
         {projects.length === 0 && <li className="text-dim text-xs">{t('projEmpty')}</li>}
         {projects.map((id) => (
-          <li key={id} className={`group flex items-center rounded-lg border ${id === active ? 'bg-panel border-line2' : 'bg-surface border-line hover:border-line2'}`}>
-            <button onClick={() => go(id)} title={id} className="flex-1 min-w-0 flex items-center gap-3 px-3 py-2.5 text-left">
-              <span className="grid place-items-center w-8 h-8 rounded-lg bg-panel border border-line shrink-0"><FolderOpen size={15} className={id === active ? 'text-fg' : 'text-dim'} /></span>
+          <li key={id} className={`group flex items-center rounded-[2px] border-l-2 border ${id === active ? 'bg-field border-line2 border-l-accent' : 'bg-surface border-line hover:border-line2'}`}>
+            <button onClick={() => go(id)} title={id} className="flex-1 min-w-0 flex items-center gap-2.5 px-2.5 py-2 text-left">
+              <FolderOpen size={13} className={`shrink-0 ${id === active ? 'text-accent' : 'text-dim'}`} />
               <span className="min-w-0">
-                <span className="block truncate font-medium">{projectLabel(id)}</span>
-                {inTauri && <span className="block truncate text-[11px] text-dim">{id}</span>}
+                <span className="block truncate font-mono">{projectLabel(id)}</span>
+                {inTauri && <span className="block truncate text-micro text-dim">{id}</span>}
               </span>
-              {id === active && <Check size={15} className="ml-auto shrink-0 text-fg" />}
+              {id === active && <Check size={13} className="ml-auto shrink-0 text-accent" />}
             </button>
             {id !== active && (
               <button onClick={() => remove(id)} title={inTauri ? `${t('projRemove')}. ${t('projFilesStay')}` : t('projRemoveWeb')}
-                className="p-2 mr-1 rounded-lg text-dim opacity-0 group-hover:opacity-100 hover:text-rose-300 hover:bg-panel focus:opacity-100"><Trash2 size={14} /></button>
+                className="p-2 mr-1 rounded-[2px] text-dim opacity-0 group-hover:opacity-100 hover:text-status-err focus:opacity-100"><Trash2 size={14} /></button>
             )}
           </li>
         ))}
       </ul>
 
       <div className="flex flex-col gap-2 pt-3 border-t border-line">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-dim">{t('projNew')} <span className="normal-case tracking-normal font-normal">· {inTauri ? t('projNewDesc') : t('projNewDescWeb')}</span></span>
+        <span className="text-micro font-mono uppercase tracking-wider text-dim">{t('projNew')} <span className="normal-case tracking-normal font-normal">· {inTauri ? t('projNewDesc') : t('projNewDescWeb')}</span></span>
         <form onSubmit={(e) => { e.preventDefault(); create() }} className="flex gap-2">
           <input autoFocus value={name} onChange={(e) => { setName(e.target.value); setErr('') }} placeholder={t('projName')}
-            className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-surface border border-line focus:border-line2 outline-none text-xs placeholder:text-dim" />
-          <button disabled={!name.trim()} className="flex items-center gap-1.5 px-3.5 rounded-lg bg-fg text-bg hover:bg-fg/90 text-xs font-semibold disabled:opacity-40">
+            className="flex-1 min-w-0 px-2.5 py-1.5 rounded-[2px] bg-field border border-line focus:border-accent outline-none text-xs font-mono placeholder:text-dim" />
+          <button disabled={!name.trim()} className="flex items-center gap-1.5 px-3 rounded-[2px] border border-accent text-accent hover:bg-accent-dim text-micro uppercase tracking-wider disabled:opacity-40">
             <FolderPlus size={13} />{t('create')}
           </button>
         </form>
         {inTauri && (
-          <button onClick={open} className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-surface border border-line hover:border-line2 text-left">
+          <button onClick={open} className="flex items-center gap-2.5 px-2.5 py-2 rounded-[2px] bg-surface border border-line hover:border-line2 text-left">
             <FolderOpen size={15} className="text-dim" />
-            <span><span className="block text-xs font-medium">{t('projOpen')}</span><span className="block text-[11px] text-dim">{t('projOpenDesc')}</span></span>
+            <span><span className="block text-xs">{t('projOpen')}</span><span className="block text-micro text-dim">{t('projOpenDesc')}</span></span>
           </button>
         )}
-        {err && <p className="text-xs text-rose-300">{err}</p>}
+        {err && <p className="text-xs text-status-err">{err}</p>}
       </div>
     </Modal>
   )

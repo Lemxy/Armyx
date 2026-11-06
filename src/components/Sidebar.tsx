@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronsUpDown, FileText, GitFork, Plus, RefreshCw, Search } from 'lucide-react'
+import { ChevronsUpDown, GitFork, Plus, RefreshCw, Search } from 'lucide-react'
 import { links, savings, tags, type Note } from '../deso'
 import { useI18n } from '../i18n'
 import { projectLabel } from '../vault'
@@ -41,69 +41,68 @@ export default function Sidebar({ notes, current, project, onSelect, onNew, onMe
   }
 
   return (
-    <aside className="w-64 shrink-0 border-r border-line bg-surface flex flex-col text-[13px]">
-      <div className="p-3 flex flex-col gap-3">
-        <div className="flex items-center gap-2 px-1">
-          <span className="grid place-items-center w-6 h-6 rounded-lg bg-fg text-bg"><GitFork size={13} /></span>
-          <span className="font-semibold tracking-tight">DesoVault</span>
+    <aside className="w-60 shrink-0 border-r border-line bg-surface flex flex-col font-mono text-xs">
+      <div className="pt-3 pb-2.5 px-3 flex flex-col gap-2.5">
+        <div className="flex items-center gap-2 pb-2 border-b border-line">
+          <span className="w-3 h-px bg-accent" />
+          <GitFork size={12} className="text-accent" />
+          <span className="text-micro tracking-widest text-mut">DESOVAULT // LOGBOOK</span>
         </div>
         <button onClick={onProjects} title={project}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-bg border border-line hover:border-line2 text-left">
-          <span className="min-w-0 flex-1">
-            <span className="block text-[10px] uppercase tracking-wider text-dim">{t('projects')}</span>
-            <span className="block truncate font-medium">{projectLabel(project)}</span>
-          </span>
-          <ChevronsUpDown size={14} className="text-dim shrink-0" />
+          className="flex items-center gap-2 px-2 py-1.5 rounded-[2px] bg-field border border-line hover:border-line2 text-left">
+          <span className="text-micro text-dim tracking-wider">PROJ:</span>
+          <span className="min-w-0 flex-1 truncate text-fg">{projectLabel(project)}</span>
+          <ChevronsUpDown size={12} className="text-dim shrink-0" />
         </button>
         {creating ? (
           <div className="flex flex-col gap-1">
             <input autoFocus value={name} onChange={(e) => { setName(e.target.value); setErr('') }} placeholder={t('noteName')}
               onKeyDown={(e) => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') { setCreating(false); setErr('') } }}
               onBlur={() => !name && setCreating(false)}
-              className="px-3 py-2 rounded-lg bg-bg border border-line2 outline-none text-xs placeholder:text-dim" />
-            {err && <span className="px-1 text-[11px] text-rose-300">{err}</span>}
+              className="px-2 py-1.5 rounded-[2px] bg-field border border-accent outline-none text-xs placeholder:text-dim" />
+            {err && <span className="px-0.5 text-micro text-status-err">{err}</span>}
           </div>
         ) : (
           <button onClick={() => setCreating(true)}
-            className="flex items-center justify-center gap-2 py-2 rounded-lg bg-fg text-bg hover:bg-fg/90 text-xs font-semibold">
-            <Plus size={14} />{t('newNote')}<kbd className="ml-1 text-[10px] opacity-60">Ctrl N</kbd>
+            className="flex items-center gap-2 px-2 py-1.5 rounded-[2px] border border-line bg-field hover:border-accent text-micro uppercase tracking-wider text-fg">
+            <Plus size={12} />{t('newNote')}<kbd className="ml-auto">CTRL+N</kbd>
           </button>
         )}
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-bg border border-line focus-within:border-line2">
-          <Search size={13} className="text-dim" />
+        <div className="flex items-center gap-2 px-2 py-1.5 rounded-[2px] bg-field border border-line focus-within:border-line2">
+          <Search size={12} className="text-dim" />
           <input ref={search} value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('search')}
             onKeyDown={(e) => { if (e.key === 'Enter' && shown[0]) { onSelect(shown[0].name); setQ('') } }}
             className="flex-1 min-w-0 bg-transparent outline-none placeholder:text-dim" />
         </div>
         {allTags.length > 0 && (
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-x-2.5 gap-y-0.5 px-0.5">
             {allTags.map((x) => (
               <button key={x} onClick={() => setTag(tag === x ? '' : x)}
-                className={`px-2 py-0.5 rounded-full text-[11px] border ${tag === x ? 'bg-panel border-line2 text-fg' : 'bg-bg border-line text-dim hover:text-fg'}`}>#{x}</button>
+                className={`text-micro ${tag === x ? 'underline text-accent font-medium' : 'text-dim hover:text-mut'}`}>#{x}</button>
             ))}
           </div>
         )}
       </div>
 
-      <ul className="flex-1 overflow-auto px-2 pb-2">
-        {shown.map((n) => {
+      <ul className="flex-1 overflow-auto border-t border-line py-1">
+        {shown.map((n, i) => {
           const on = n.name === current
           return (
             <li key={n.name}>
               <button onClick={() => onSelect(n.name)}
                 onContextMenu={(e) => onMenu(e, [{ label: t('copyLink'), onClick: () => onCopy(n.name) }, { label: t('deleteNote'), danger: true, onClick: () => onDelete(n.name) }])}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg ${on ? 'bg-panel text-fg' : 'text-mut hover:bg-panel/60 hover:text-fg'}`}>
-                <FileText size={14} className={on ? 'text-fg' : 'text-dim'} />
-                <span className="truncate">{n.name}</span>
-                <span title={t('connections')} className="ml-auto text-[10px] text-dim tabular-nums">{links(n.content).length || ''}</span>
+                className={`w-full flex items-center gap-2 pl-2 pr-3 py-1 border-l-2 ${on ? 'bg-panel border-accent text-fg font-medium' : 'border-transparent text-mut hover:bg-panel hover:text-fg'}`}>
+                <span className="text-dim text-micro tabular-nums w-5 text-right select-none">{String(i + 1).padStart(2, '0')}</span>
+                <span className="font-mono text-xs truncate flex-1 text-left">{n.name}</span>
+                <span title={t('connections')} className="text-dim text-micro tabular-nums">{links(n.content).length || ''}</span>
               </button>
             </li>
           )
         })}
       </ul>
-      <div className="flex items-center gap-2 px-4 py-3 border-t border-line text-[11px] text-dim">
-        <span>{notes.length} {t('notes')} · {total.d} tok vs {total.m} md</span>
-        {onRescan && <button onClick={onRescan} title={t('rescan')} className="ml-auto p-1 rounded text-dim hover:text-fg hover:bg-panel"><RefreshCw size={13} /></button>}
+      <div className="flex items-center gap-2 pl-3 pr-2 py-2 border-t border-line text-micro text-dim tabular-nums">
+        <span>REC: {notes.length} · TOK: {total.d} / {total.m}</span>
+        {onRescan && <button onClick={onRescan} title={t('rescan')} className="ml-auto p-1 rounded-[2px] text-dim hover:text-fg"><RefreshCw size={12} /></button>}
       </div>
     </aside>
   )

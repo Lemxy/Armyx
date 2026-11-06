@@ -8,18 +8,20 @@ function highlight(src: string) {
     .split('\n')
     .map((l) => {
       const inline = l
-        .replace(/(-&gt;)?@[\w-]+/g, '<span class="text-fg">$&</span>')
-        .replace(/(^|\s)(#[A-Za-z][\w-]*)/g, '$1<span class="text-mut">$2</span>')
-      if (/^# /.test(l)) return `<span class="text-fg font-semibold">${inline}</span>`
-      if (/^[?!]/.test(l)) return `<span class="text-dim">${inline}</span>`
-      if (/^\+(?!&gt;)\S/.test(l)) return `<span class="text-emerald-300">${inline}</span>`
-      if (/^-(?!&gt;)\S/.test(l)) return `<span class="text-rose-300">${inline}</span>`
+        .replace(/(-&gt;)?@[\w-]+/g, '<span class="text-accent font-mono underline decoration-accent/40">$&</span>')
+        .replace(/(^|\s)(#[A-Za-z][\w-]*)/g, '$1<span class="text-dim font-mono">$2</span>')
+      if (/^# /.test(l)) return `<span class="font-serif text-base font-semibold text-fg tracking-tight">${inline}</span>`
+      if (/^\?/.test(l)) return `<span class="text-mut font-mono font-medium">${inline}</span>`
+      if (/^!/.test(l)) return `<span class="text-mut font-mono">${inline}</span>`
+      if (/^\+(?!&gt;)\S/.test(l)) return `<span class="text-status-ok font-mono">${inline}</span>`
+      if (/^-(?!&gt;)\S/.test(l)) return `<span class="text-status-err font-mono">${inline}</span>`
       return inline
     })
     .join('\n')
 }
 
-const shared = 'absolute inset-0 m-0 p-6 font-mono text-[13px] leading-6 whitespace-pre-wrap break-words overflow-y-scroll'
+// No wrapping, so one logical line is one visual line and the gutter numbers stay aligned.
+const shared = 'absolute inset-0 m-0 pt-6 pb-6 pl-4 pr-6 font-mono text-[13px] leading-6 whitespace-pre overflow-scroll'
 
 type Ac = { start: number; q: string; x: number; y: number }
 
@@ -27,6 +29,7 @@ export default function Editor({ note, notes, onChange }: { note: Note; notes: N
   const pre = useRef<HTMLPreElement>(null)
   const ta = useRef<HTMLTextAreaElement>(null)
   const mirror = useRef<HTMLDivElement>(null)
+  const gutter = useRef<HTMLDivElement>(null)
   const [ac, setAc] = useState<Ac | null>(null)
   const [sel, setSel] = useState(0)
   const hits = ac ? notes.filter((n) => n.name !== note.name && n.name.includes(ac.q.toLowerCase())).slice(0, 8) : []
@@ -41,7 +44,7 @@ export default function Editor({ note, notes, onChange }: { note: Note; notes: N
     const mark = document.createElement('span')
     mark.textContent = '@'
     mirror.current.appendChild(mark)
-    setAc({ start, q: m[1], x: mark.offsetLeft, y: mark.offsetTop - el.scrollTop + 24 })
+    setAc({ start, q: m[1], x: mark.offsetLeft - el.scrollLeft, y: mark.offsetTop - el.scrollTop + 24 })
     setSel(0)
   }
   const pick = (name: string) => {
@@ -58,30 +61,36 @@ export default function Editor({ note, notes, onChange }: { note: Note; notes: N
     else if (e.key === 'Escape') { e.preventDefault(); setAc(null) }
   }
   const s = savings(note.content)
+  const lines = note.content.split('\n')
   return (
     <div className="flex flex-col h-full">
-      <div className="px-6 h-9 text-xs border-b border-line flex items-center justify-between text-dim">
+      <div className="px-4 h-8 text-micro border-b border-line bg-surface flex items-center justify-between text-dim font-mono tabular-nums">
         <span>{note.name}.deso</span>
-        <span>{s.d} tok vs {s.m} md · <span className="text-mut">{s.pct}% saved</span></span>
+        <span>{s.d} tok vs {s.m} md · <span className="text-accent">{s.pct}% saved</span></span>
       </div>
-      <div className="relative flex-1 min-h-0">
-        <pre ref={pre} aria-hidden className={`${shared} pointer-events-none text-fg/80`}
+      <div className="flex flex-1 min-h-0">
+      <div ref={gutter} aria-hidden className="w-12 shrink-0 overflow-hidden pt-6 text-dim text-micro leading-6 font-mono select-none pr-3 border-r border-line/50 text-right tabular-nums">
+        {lines.map((_, i) => <div key={i} className="leading-6">{i + 1}</div>)}
+      </div>
+      <div className="relative flex-1 min-h-0 max-w-[84ch]">
+        <pre ref={pre} aria-hidden className={`${shared} pointer-events-none text-fg`}
           dangerouslySetInnerHTML={{ __html: highlight(note.content) + ' ' }} />
         <div ref={mirror} aria-hidden className={`${shared} invisible pointer-events-none`} />
-        <textarea ref={ta} value={note.content} spellCheck={false}
+        <textarea ref={ta} wrap="off" value={note.content} spellCheck={false}
           onChange={(e) => { onChange(e.target.value); detect(e.target) }}
           onKeyDown={keys} onClick={(e) => detect(e.currentTarget)} onBlur={() => setAc(null)}
-          onScroll={(e) => { if (pre.current) pre.current.scrollTop = e.currentTarget.scrollTop; setAc(null) }}
-          className={`${shared} bg-transparent text-transparent caret-fg resize-none outline-none`} />
+          onScroll={(e) => { const t = e.currentTarget; if (pre.current) { pre.current.scrollTop = t.scrollTop; pre.current.scrollLeft = t.scrollLeft } if (gutter.current) gutter.current.scrollTop = t.scrollTop; setAc(null) }}
+          className={`${shared} bg-transparent text-transparent caret-accent resize-none outline-none`} />
         {ac && hits.length > 0 && (
           <ul role="listbox" style={{ left: Math.min(ac.x, 400), top: ac.y }}
-            className="absolute z-10 w-56 py-1 rounded-lg bg-[#18181b] border border-[#27272a] text-[13px]">
+            className="absolute z-10 w-56 py-1 rounded-[2px] bg-panel border border-line2 font-mono text-xs">
             {hits.map((n, i) => (
               <li key={n.name} role="option" aria-selected={i === sel} onMouseDown={(e) => { e.preventDefault(); pick(n.name) }}
-                className={`px-3 py-1 cursor-pointer ${i === sel ? 'bg-[#27272a] text-fg' : 'text-mut'}`}>@{n.name}</li>
+                className={`px-3 py-1 cursor-pointer ${i === sel ? 'bg-field text-accent' : 'text-mut'}`}>@{n.name}</li>
             ))}
           </ul>
         )}
+      </div>
       </div>
     </div>
   )
