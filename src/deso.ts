@@ -62,7 +62,7 @@ const prop = (src: string, k: string) => src.match(new RegExp(String.raw`^\?${k}
 /** How the agent should read `graphMap` (kept next to it so the two never drift apart). */
 export const MAP_INTRO =
   'Below is the map of the whole project graph, one line per note: `id path — about [exports] -> ids of linked notes`; ' +
-  'less important notes are shortened to `id path — about`. A block "Best matches" may follow with the files closest to the question. Use it to know what exists and where to look. ' +
+  'less important notes are shortened to `id path — about`. A `~` before a file in `uses` / `used by` marks a link guessed by symbol name (not an import line). A block "Best matches" may follow with the files closest to the question. Use it to know what exists and where to look. ' +
   'If the map does not clearly name the answer, search the project (Grep/Glob) or open the file; never guess a path.'
 
 const MAP_BUDGET = 8000 // tokens, resent on every turn: half for full lines, half for shortened ones
@@ -126,14 +126,32 @@ const focusScore = (notes: Note[], focus: string) => {
  * The notes that best match `focus`, one plain line each (real paths, no ids). Send it after a static `graphMap(notes)`:
  * the map stays identical between questions, so the API serves it from the prompt cache at a fraction of the price.
  */
-export const topHits = (notes: Note[], focus: string, k = 12) => scoredHits(notes, focus).slice(0, k)
-  .map(({ note: n }, i) => {
+export const topHits = (notes: Note[], focus: string, k = 12, spread = DIVERSE) => diverse(scoredHits(notes, focus).map((h) => h.note), k, undefined, spread)
+  .map((n, i) => {
     // for the best few: which files this one uses (symbols it takes from them) and which files use it, so an agent can follow a bug
-    // to its cause without searching the project
-    const calls = i < 3 ? prop(n.content, 'calls')?.split(/, (?=[^,]*\()/).slice(0, 3).join(', ') : undefined
-    const callers = i < 3 ? prop(n.content, 'callers')?.split(', ').slice(0, i ? 4 : 8).join(', ') : undefined
+    // to its cause without searching the project. Links named in the source come first; a `~` marks one guessed by symbol name.
+    const certain = (l: string[]) => [...l].sort((a, b) => Number(a.startsWith('~')) - Number(b.startsWith('~')))
+    const calls = i < 3 ? certain(prop(n.content, 'calls')?.split(/, (?=[^,]*\()/) ?? []).slice(0, 3).join(', ') : undefined
+    const callers = i < 3 ? certain(prop(n.content, 'callers')?.split(', ') ?? []).slice(0, i ? 4 : 8).join(', ') : undefined
     return [prop(n.content, 'path') ?? title(n), prop(n.content, 'about')?.slice(0, 70)].filter(Boolean).join(' — ') + (calls ? ` | uses ${calls}` : '') + (callers ? ` | used by ${callers}` : '')
   }).join('\n')
+
+/**
+ * Best-first notes, but no folder takes more than `per` places while others are waiting, so one busy folder (generated code,
+ * a test suite) cannot fill the whole list. `topHits(.., false)` turns it off (the benchmark compares both).
+ */
+export const DIVERSE = true
+export const diverse = (ranked: Note[], k: number, per = Math.max(2, Math.ceil(k / 3)), on = DIVERSE) => {
+  if (!on) return ranked.slice(0, k)
+  const dir = (n: Note) => (prop(n.content, 'path') ?? '').split('/').slice(0, -1).join('/')
+  const used = new Map<string, number>(), picked: Note[] = [], later: Note[] = []
+  for (const n of ranked) {
+    if (picked.length >= k) break
+    const d = dir(n), c = used.get(d) ?? 0
+    if (c < per) { used.set(d, c + 1); picked.push(n) } else later.push(n)
+  }
+  return picked.concat(later).slice(0, k)
+}
 
 /** Notes matching `focus`, best first, with their scores (a big gap between the first two means the first is a safe answer). */
 export const scoredHits = (notes: Note[], focus: string) => {
@@ -211,6 +229,10 @@ export const outline = (notes: Note[], max = 30) => {
  * outline and the best matches are sent.
  */
 export const SMALL_PROJECT = 300
+
+/** Version of the note format the scanner writes (`?schema` in project-map); older graphs lack the `~` marks. Keep equal to SCHEMA in scan.rs. */
+export const SCHEMA = 2
+export const staleSchema = (notes: Note[]) => { const m = notes.find((n) => n.name === 'project-map'); return !!m && Number(prop(m.content, 'schema') ?? 0) < SCHEMA }
 export const mapFor = (notes: Note[]) => notes.length <= SMALL_PROJECT ? graphMap(notes, 2500) : `Folders (the project has ${notes.length} files, too many to list; the best matches below are the ranking for this question):
 ${outline(notes)}`
 
