@@ -2,3 +2,13 @@ node_modules/
 dist/
 src-tauri/target/
 src-tauri/gen/
+
+# build artefacts
+tsconfig.tsbuildinfo
+
+# private project (NovaFull): questions and raw answers name internal files
+bench/results*.json
+bench/questions.novafull*.json
+bench/edit-tasks.novafull*.json
+
+.claude/settings.local.json
