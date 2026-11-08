@@ -1,5 +1,0 @@
-{
-  "name": "armyx",
-  "version": "0.1.0",
-  "description": "Cuts tokens: a project map for the agent and its subagents, skill hints per prompt, and an off switch for heavy connectors. Commands: /armyx, /armyx-debt."
-}
