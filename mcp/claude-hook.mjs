@@ -5,7 +5,8 @@
 //             NOT RECOMMENDED: measured on a 29 KB file (limit 20000) it cost 1-2 extra turns, no saving
 //   prompt   (UserPromptSubmit)  prints the best-matching files for the user's prompt
 // Hook stdout is added to the agent's context. Run: node --experimental-strip-types mcp/claude-hook.mjs <graph dir> session|prompt|pretool
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readFileSync, statSync } from 'node:fs'
+import { loadNotes } from './load.mjs'
 import { MAP_INTRO, SMALL_PROJECT, graphMap, sureHits, topHits } from '../src/deso.ts'
 
 const [dir, mode, toolsDir] = process.argv.slice(2) // toolsDir (optional): notes made by mcp/tools-to-notes.mjs
@@ -21,7 +22,7 @@ if (mode === 'readgate') {
   if (big) process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'File is big. Read it with offset and limit (use Grep or the map to find the lines first); a whole-file Read costs thousands of tokens on every later turn.' } }))
   process.exit(0)
 }
-const load = (d) => readdirSync(d).filter((f) => f.endsWith('.deso')).sort().map((f) => ({ name: f.slice(0, -5), content: readFileSync(`${d}/${f}`, 'utf8') }))
+const load = loadNotes
 const notes = load(dir)
 // big project: no map, and best matches only when sure (measured: anything more costs more than plain search); small: lean map and hits
 const big = notes.length > SMALL_PROJECT

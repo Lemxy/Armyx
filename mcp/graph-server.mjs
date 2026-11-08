@@ -2,12 +2,12 @@
 // The link tools (neighbors, impact, outline) and the editing tools (show, patch) were removed: in every benchmark here the agent
 // rarely used them, and when told to, it read more files and cost more (see README).
 // Run: node --experimental-strip-types mcp/graph-server.mjs <graph dir>
-import { readdirSync, readFileSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 import { scoredHits } from '../src/deso.ts'
+import { loadNotes } from './load.mjs'
 
 const dir = process.argv[2]
-const notes = readdirSync(dir).filter((f) => f.endsWith('.deso')).sort().map((f) => ({ name: f.slice(0, -5), content: readFileSync(`${dir}/${f}`, 'utf8') }))
+const notes = loadNotes(dir)
 const prop = (n, k) => n.content.match(new RegExp(`^\\?${k}:\\s*(.+)$`, 'm'))?.[1].trim()
 const line = (n) => [prop(n, 'path') ?? n.name, prop(n, 'about')?.slice(0, 90)].filter(Boolean).join(' — ')
 
