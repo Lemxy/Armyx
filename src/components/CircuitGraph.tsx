@@ -3,7 +3,7 @@ import { Eye, Maximize2, Search } from 'lucide-react'
 import { links, tags, title, type Note } from '../deso'
 import { isSmooth, useI18n } from '../i18n'
 import type { MenuItem } from './ContextMenu'
-import { layout, type Edge, type P } from '../layout'
+import { communities, layout, type Edge, type P } from '../layout'
 
 const W = 232, H = 118, R = 14
 const PALETTE = ['--m1', '--m2', '--m3', '--m4', '--m5', '--m6', '--m7']
@@ -47,6 +47,8 @@ export default function CircuitGraph({ notes, current, project, onOpen, onNew, o
   const [tree, setTree] = useState(() => { try { return localStorage.getItem('desovault.tree') === '1' } catch { return false } })
   const auto = useMemo(() => layout(notes.map((n) => n.name), edges, tree), [notes, edges, tree])
   const target = (n: string): P => pos[n] ?? auto[n] ?? { x: 0, y: 0 }
+  const comms = useMemo(() => communities([...names], edges), [names, edges])
+  const commOf = useMemo(() => new Map(comms.flatMap((c, i) => c.members.map((n) => [n, PALETTE[i % PALETTE.length]] as const))), [comms])
   const deg = useMemo(() => {
     const m = new Map<string, { i: number; o: number }>([...names].map((n) => [n, { i: 0, o: 0 }]))
     for (const e of edges) { m.get(e.from)!.o++; m.get(e.to)!.i++ }
@@ -274,7 +276,7 @@ export default function CircuitGraph({ notes, current, project, onOpen, onNew, o
             const match = filtering && hit.has(n.name)
             const dim = filtering ? !match : !!focus && n.name !== focus && !hue.has(n.name)
             const picked = sel.has(n.name)
-            const ring = hue.get(n.name) ?? marks[n.name]
+            const ring = hue.get(n.name) ?? marks[n.name] ?? commOf.get(n.name)
             const gold = picked || match || n.name === current || n.name === focus
             const stroke = gold ? 'var(--accent)' : ring ? css(ring) : 'var(--line)'
             return (
@@ -313,6 +315,23 @@ export default function CircuitGraph({ notes, current, project, onOpen, onNew, o
             <button key={t} onClick={() => setTag(tag === t ? '' : t)}
               className={`btn-press px-2.5 py-0.5 rounded-full text-micro border bg-surface ${tag === t ? 'border-accent text-accent' : 'border-line text-dim hover:text-mut hover:border-line2'}`}>#{t}</button>
           ))}
+        </div>
+      )}
+
+      {comms.length > 0 && (
+        <div className="anim-rise absolute top-4 left-4 w-56 max-h-[60%] overflow-y-auto rounded-2xl border border-line bg-surface/95 shadow-float text-micro px-3 py-3">
+          <div className="px-1 pb-2 text-base font-semibold">{tr('communities')}</div>
+          {comms.map((c, i) => {
+            const off = c.members.every((n) => hidden.has(n))
+            return (
+              <label key={c.hub} className="flex items-center gap-2 px-1 py-1 rounded-lg hover:bg-panel cursor-pointer">
+                <input type="checkbox" checked={!off} onChange={() => setHidden((h) => { const x = new Set(h); c.members.forEach((n) => off ? x.delete(n) : x.add(n)); return x })} />
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: css(PALETTE[i % PALETTE.length]) }} />
+                <span className="flex-1 truncate text-mut" title={c.hub}>{clip(title(notes.find((n) => n.name === c.hub)!), 20)}</span>
+                <span className="text-dim tabular-nums">{c.members.length}</span>
+              </label>
+            )
+          })}
         </div>
       )}
 

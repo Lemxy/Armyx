@@ -4,6 +4,7 @@ import { getKey } from './keys'
 
 const GATEWAYS = ['https://api.deepseek.com', 'https://api.reformboss.com/v1']
 const LAST = 'desovault.dsGateway'
+const TIMEOUT = 90_000 // ms per gateway call: a hung gateway falls through to the next one instead of freezing the run
 
 export async function dsChat(key: string, body: object): Promise<any> {
   const custom = getKey('dsGateway').replace(/\/+$/, '') // user's own gateway from Settings
@@ -12,7 +13,7 @@ export async function dsChat(key: string, body: object): Promise<any> {
   const order = last && all.includes(last) ? [last, ...all.filter((g) => g !== last)] : all
   let err = ''
   const headers = { 'content-type': 'application/json', authorization: `Bearer ${key}` }
-  const post = async (g: string, b: object) => { const r = await fetch(`${g}/chat/completions`, { method: 'POST', headers, body: JSON.stringify(b) }); return { r, j: await r.json().catch(() => ({})) } }
+  const post = async (g: string, b: object) => { const r = await fetch(`${g}/chat/completions`, { method: 'POST', headers, body: JSON.stringify(b), signal: AbortSignal.timeout(TIMEOUT) }); return { r, j: await r.json().catch(() => ({})) } }
   for (const g of order) {
     try {
       let { r, j } = await post(g, body)

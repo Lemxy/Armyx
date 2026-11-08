@@ -44,3 +44,29 @@ export function layout(names: string[], edges: Edge[], tree = false): Record<str
   }
   return out
 }
+
+/** Label propagation: groups of densely linked notes, biggest first, each named by its most-linked member. Isolated notes are left out. */
+export function communities(names: string[], edges: Edge[]): { hub: string; members: string[] }[] {
+  const nb = new Map(names.map((n) => [n, [] as string[]]))
+  for (const e of edges) { nb.get(e.from)?.push(e.to); nb.get(e.to)?.push(e.from) }
+  const label = new Map(names.map((n) => [n, n]))
+  for (let it = 0; it < 15; it++) { // fixed order + tie-break by name keeps it deterministic; shortcut: no oscillation guard beyond 15 rounds
+    let changed = false
+    for (const n of [...names].sort()) {
+      const c = new Map<string, number>()
+      // a neighbour's vote counts more the more neighbours they share, so a lone bridge link loses to a tight group
+      const mine = new Set(nb.get(n))
+      for (const m of nb.get(n)!) c.set(label.get(m)!, (c.get(label.get(m)!) ?? 0) + 1 + nb.get(m)!.filter((x) => mine.has(x)).length)
+      const best = [...c].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]
+      // switch only for a strictly bigger majority, so a lone bridge cannot merge two groups
+      if (best && best[0] !== label.get(n) && best[1] > (c.get(label.get(n)!) ?? 0)) { label.set(n, best[0]); changed = true }
+    }
+    if (!changed) break
+  }
+  const groups = new Map<string, string[]>()
+  for (const n of names) groups.set(label.get(n)!, [...(groups.get(label.get(n)!) ?? []), n])
+  const deg = (n: string) => nb.get(n)!.length
+  return [...groups.values()].filter((g) => g.length > 1)
+    .map((g) => ({ hub: [...g].sort((a, b) => deg(b) - deg(a) || a.localeCompare(b))[0], members: g }))
+    .sort((a, b) => b.members.length - a.members.length || a.hub.localeCompare(b.hub))
+}

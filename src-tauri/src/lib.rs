@@ -244,7 +244,7 @@ fn parse_codex(raw: &str) -> Option<Result<Answer, String>> {
 /// system: appended to claude's system prompt (agy has no such flag: it is prepended to the prompt); budget: USD cap per call.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
-async fn run_agent(cli: String, prompt: String, model: Option<String>, effort: Option<String>, session: Option<String>, resume: Option<bool>, tools: Option<String>, system: Option<String>, budget: Option<f64>, worktree: Option<String>) -> Result<Answer, String> {
+async fn run_agent(cli: String, prompt: String, model: Option<String>, effort: Option<String>, session: Option<String>, resume: Option<bool>, tools: Option<String>, system: Option<String>, budget: Option<f64>, max_turns: Option<u32>, worktree: Option<String>) -> Result<Answer, String> {
     let cwd = match worktree.filter(|w| !w.is_empty()) { Some(id) => Some(worktree::dir(&root(), &id)?), None => None }; // never silently fall back to the real project
     if cwd.as_ref().is_some_and(|d| !d.is_dir()) { return Err("the isolated worktree is gone: run the orchestra again".into()) }
     let model_opt = model.clone();
@@ -262,6 +262,7 @@ async fn run_agent(cli: String, prompt: String, model: Option<String>, effort: O
             if let Some(t) = tools { args.extend(["--tools".into(), t]) }
             if let Some(s) = system { args.extend(["--append-system-prompt".into(), s]) }
             if let Some(b) = budget { args.extend(["--max-budget-usd".into(), b.to_string()]) }
+            if let Some(n) = max_turns { args.extend(["--max-turns".into(), n.to_string()]) } // stops an agent looping on reads; a hidden flag, absent from --help
             if let Some(id) = session.filter(|s| !s.is_empty()) { args.extend([if resume == Some(true) { "--resume" } else { "--session-id" }.into(), id]) }
             // The user explicitly asked for agents to run with no permission prompts: they can edit files AND run commands unasked.
             args.extend(["--dangerously-skip-permissions".into(), "-p".into()]);

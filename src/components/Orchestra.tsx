@@ -4,76 +4,33 @@ import { useI18n } from '../i18n'
 import { agyModels, inTauri, openRoot, runAgent, stopAgents, worktreeApply, worktreeCreate, worktreeDiff, worktreeDiscard, worktreeStamp, type Answer } from '../vault'
 import Markdown from './Markdown'
 import { MODELS } from './AgentSidebar'
-import { graphMap, MAP_INTRO, tokens, type Note } from '../deso'
+import { graphMap, tokens, type Note } from '../deso'
 import type { MenuItem } from './ContextMenu'
 import { getKey } from '../keys'
 import { dsChat } from '../deepseek'
+import { dsUsage } from '../dsprice'
+import { BRIEF, BUDGET, clip, leadChat, LOG_MAX, NOTE_MAX, READ_ONLY, runOrchestra, save, workerEffort, MAX_TURNS, type Agent, type Deps, type Entry, type Node, type Opts, type Orch, type Reply, type Row, type Use } from '../orchestra'
 
-type Agent = 'claude' | 'agy' | 'codex' | 'deepseek' | 'nano'
 const DEEPSEEK = MODELS.deepseek
 const EFFORTS = ['low', 'medium', 'high', 'max'] as const
 const NANO = MODELS.nano
 const CODEX = [['', 'Codex (default model)']] as const // model comes from the user's Codex config
 const NAMES = { claude: 'Claude', agy: 'Antigravity', codex: 'Codex', deepseek: 'DeepSeek', nano: 'Nano Banana' } as const
 // Recommended model per role, shown first in every model picker. agy takes its effort from the model name (...-low / ...-high).
-const PRESETS = [
+// think = Claude effort the block gets from this preset; tools = the only tools it may use (read-only for search).
+type Preset = { ru: string; en: string; agent: Agent; model?: string; effort?: string; think?: string; tools?: string }
+const PRESETS: readonly Preset[] = [
   { ru: 'Ведущий', en: 'Lead', agent: 'agy', effort: 'low' },
   { ru: 'Планирование задач', en: 'Task planning', agent: 'agy', effort: 'high' },
-  { ru: 'Кодинг', en: 'Coding', agent: 'claude', model: 'claude-sonnet-5-5' },
-  { ru: 'Кодинг (сложный)', en: 'Hard coding', agent: 'claude', model: 'claude-opus-5-5' },
-  { ru: 'Поиск по карте и файлам', en: 'Search map & files', agent: 'claude', model: 'claude-haiku-5-5' },
+  { ru: 'Кодинг', en: 'Coding', agent: 'claude', model: 'claude-sonnet-5-5', think: 'medium' },
+  { ru: 'Кодинг (сложный)', en: 'Hard coding', agent: 'claude', model: 'claude-opus-5-5', think: 'high' },
+  { ru: 'Поиск по карте и файлам', en: 'Search map & files', agent: 'claude', model: 'claude-haiku-5-5', tools: READ_ONLY },
   { ru: 'Поиск по карте и файлам', en: 'Search map & files', agent: 'deepseek', model: 'deepseek-v4-flash' },
   { ru: 'Картинки', en: 'Images', agent: 'nano', model: NANO[0][0] },
-] as const
-type Node = {
-  id: string; x: number; y: number; kind: 'model' | 'rules' | 'start'
-  agent?: Agent; model?: string; effort?: string; name?: string; role?: string // effort: Claude blocks only; name = your title for the block; role = the recommended role it was picked for
-  text: string; notes: string[] // text = context for a model block, the rules themselves for a rules block; notes = embedded note names
-  out?: string; img?: string; state?: 'run' | 'ok' | 'err'
-  sid?: string; mapSum?: number // claude session continued with --resume, so the dialogue isn't resent; mapSum = hash of the map that session last saw
-  final?: string; finalSum?: number // lead only: its answer after the agents reported back, and the hash of the reports it was written from
-  sum?: number; use?: Use // sum = hash of what the block was last run with: unchanged → its answer is reused; use = tokens of the last call
-}
-type Use = Omit<Answer, 'text'> & { same?: boolean }
-type Opts = { keep?: boolean; tools?: string; effort?: string; mapSum?: number }
-// The dialogue is saved with the orchestra. `task` = what an agent was asked, `user` = a message you wrote, `run` = a divider between runs.
-// `usage` = the table of who spent what, posted after every run or answer (rows; no ids, so it never enters an agent's dialogue).
-type Entry = { from: string; to: string; text: string; kind: 'task' | 'reply' | 'error' | 'user' | 'run' | 'usage'; at: number; toId?: string; fromId?: string; quiet?: boolean; rows?: Row[]; img?: string }
-type Row = { who: string; use: Use }
-type Orch = { id: string; name: string; task: string; nodes: Node[]; edges: [string, string][]; log?: Entry[]; queue?: boolean; iso?: boolean; wt?: boolean } // iso: agents work in a git worktree, wt: that worktree exists and holds changes to review; queue: one block at a time; default: blocks run as soon as their inputs are ready, in parallel
-const LOG_MAX = 200
-const INPUT_MAX = 12000, NOTE_MAX = 6000 // chars: a longer handoff is cut; a longer embedded note is passed as a file to read
-const BUDGET = 3 // USD cap per call (claude --max-budget-usd): stops a runaway agent, not normal work
-// Appended to every orchestra agent's system prompt: short answers are fewer output tokens AND smaller inputs for the next block.
-const BRIEF = 'Answer tersely, like a senior engineer in a hurry: no greeting, no preamble, no restating the task, no closing summary or offers. ' +
-  'Fragments are fine; drop filler and hedging. Keep code, paths, names, numbers and errors exact. ' +
-  'Write long material (code, full lists, reports) into files and reply with their paths and a one-line gist. ' +
-  'A required output format (such as "### A" sections) still comes first and stays complete and self-contained.'
-const clip = (s: string) => (s.length > INPUT_MAX ? `${s.slice(0, INPUT_MAX)}\n…(cut: ${s.length - INPUT_MAX} more chars)` : s)
+]
 const k = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`)
 
 const W = 272, HEAD = 20 // node width; y of the link handles, measured from the node's top
-// cyrb53: 53 bits, so two different inputs colliding (and a stale answer being reused) is out of the question in practice
-const hash = (s: string) => {
-  let a = 0xdeadbeef, b = 0x41c6ce57
-  for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); a = Math.imul(a ^ c, 2654435761); b = Math.imul(b ^ c, 1597334677) }
-  a = Math.imul(a ^ (a >>> 16), 2246822507) ^ Math.imul(b ^ (b >>> 13), 3266489909)
-  b = Math.imul(b ^ (b >>> 16), 2246822507) ^ Math.imul(a ^ (a >>> 13), 3266489909)
-  return 4294967296 * (2097151 & b) + (a >>> 0)
-}
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
-const TRANSIENT = /overload|rate.?limit|too many|429|50\d|timed? ?out|econn|network|temporar|unavailable/i // worth another try; a bad key or model is not
-const RETRIES = 2
-const retry = async <T,>(fn: () => Promise<T>, stop: () => boolean): Promise<T> => {
-  for (let tries = 0; ; tries++) {
-    try { return await fn() } catch (e) {
-      if (tries >= RETRIES || stop() || !TRANSIENT.test(String(e))) throw e
-      await sleep(2000 * 2 ** tries)
-      if (stop()) throw e
-    }
-  }
-}
-const RUN_CAP = 10 // USD per run: no new block starts after this (a running one is still bound by BUDGET). Only Claude reports cost.
 const uid = () => Math.random().toString(36).slice(2, 9)
 const fresh = (n: number): Orch => ({ id: uid(), name: `Orchestra ${n}`, task: '', nodes: [], edges: [], iso: inTauri })
 // Older saves may hold more than one start block; keep the first.
@@ -91,7 +48,12 @@ export default function Orchestra({ notes, project, onMenu }: { notes: Note[]; p
   const stopped = useRef(false) // Stop was pressed: blocks not started yet stay idle
   const [agy, setAgy] = useState<readonly (readonly [string, string])[]>(MODELS.agy)
   const canvas = useRef<HTMLDivElement>(null)
-  useEffect(() => { localStorage.setItem(KEY, JSON.stringify(orchs, (k, v) => (k === 'img' ? undefined : v))) }, [orchs, KEY])
+  const saveWarned = useRef(false) // warn about a failed save once, not on every render
+  useEffect(() => {
+    const r = save(KEY, orchs)
+    if (r === 'failed' && !saveWarned.current) { saveWarned.current = true; addLog({ from: '', to: '', kind: 'error', text: t('orchSaveFail') }) }
+    if (r !== 'failed') saveWarned.current = false
+  }, [orchs, KEY])
   useEffect(() => { if (inTauri) agyModels().then((l) => l.length && setAgy(l)).catch(console.error) }, [])
 
   const o = orchs.find((x) => x.id === aid) ?? orchs[0]
@@ -108,9 +70,9 @@ export default function Orchestra({ notes, project, onMenu }: { notes: Note[]; p
   const embed = (names: string[]) => names.map((x) => { const c = notes.find((k) => k.name === x)?.content ?? ''
     return `## @${x}\n${c.length > NOTE_MAX ? `(large note, ~${tokens(c)} tok: read the file \`${x}.deso\` in the project folder or its \`.desovault\` folder)` : c}` }).join('\n\n')
   const resolve = (p: (typeof PRESETS)[number]): Partial<Node> => {
-    if (p.agent !== 'agy') return { agent: p.agent, model: p.model, effort: undefined }
+    if (p.agent !== 'agy') return { agent: p.agent, model: p.model, effort: p.think, tools: p.tools }
     const f = agy.filter(([m]) => m.includes('3.8') && m.includes('flash'))
-    return { agent: 'agy', model: (f.find(([m]) => m.endsWith(`-${p.effort}`)) ?? f[0] ?? agy[0])[0], effort: undefined }
+    return { agent: 'agy', model: (f.find(([m]) => m.endsWith(`-${p.effort}`)) ?? f[0] ?? agy[0])[0], effort: undefined, tools: undefined }
   }
   const presetLabel = (p: (typeof PRESETS)[number]) => { const m = resolve(p); return `${p[lang]} — ${models(p.agent).find((x) => x[0] === m.model)?.[1] ?? m.model}` }
   const label = (n: Node) => n.kind === 'rules' ? t('blockRules') : `${NAMES[n.agent ?? 'claude']} · ${models(n.agent ?? 'claude').find((m) => m[0] === n.model)?.[1] ?? n.model}`
@@ -190,117 +152,20 @@ ${clip(d)}
     } catch (e) { addLog({ from: 'git', to: '', text: String(e), kind: 'error' }) }
   }
 
+  // What the engine needs from the screen: the same calls the old inline run() made.
+  const deps = (): Deps => ({
+    exec, patch, addLog, history, embed, label, who, t,
+    stamp: () => (inTauri ? worktreeStamp(o.iso ? o.id : undefined) : Promise.resolve('')),
+    stopped: () => stopped.current,
+    leadMap: (query) => graphMap(notes, undefined, query),
+  })
   // `msg` = something you wrote to the lead: the lead takes it as a new instruction and briefs every agent again.
   // force (Shift+click on Run): rerun every block, even one whose input has not changed.
   const run = async (msg?: string, force = false) => {
     if (running || !(await isolate())) return
     stopped.current = false
-    const prev = new Map(o.nodes.map((n) => [n.id, n]))
-    const agents = o.nodes.filter((n) => n.kind !== 'rules') // the lead (start) and the model blocks
-    const byId = new Map(o.nodes.map((n) => [n.id, n]))
-    const letters = o.nodes.filter((n) => n.kind === 'model').map((n) => n.id) // A, B, C… in creation order: how the lead addresses each agent
-    const tag = (id: string) => String.fromCharCode(65 + letters.indexOf(id))
-    // Kahn's order over agent blocks; anything left over is a cycle.
-    const left = new Set(agents.map((n) => n.id)), order: Node[] = []
-    while (left.size) {
-      const ready = [...left].filter((id) => !o.edges.some(([a, b]) => b === id && left.has(a)))
-      if (!ready.length) { patch([...left][0], { state: 'err', out: t('orchCycle') }); return }
-      ready.forEach((id) => { left.delete(id); order.push(byId.get(id)!) })
-    }
-    setRunning(true); addLog({ from: '', to: '', text: '', kind: 'run' })
-    const lead = o.nodes.find((n) => n.kind === 'start')!
-    if (msg) addLog({ from: t('orchUser'), to: who(lead), toId: lead.id, text: msg, kind: 'user' })
-    try {
-    upd((c) => ({ ...c, nodes: c.nodes.map((n) => ({ ...n, out: undefined, final: undefined, state: undefined, use: undefined, img: undefined, sid: n.kind === 'start' ? n.sid : undefined })) })) // a worker's chat session restarts from the log after each run
-    const outs = new Map<string, string>()
-    // The lead answers with "### A" … sections; each agent receives only its own section (whole answer if the lead skipped it).
-    const section = (leadOut: string, id: string) => {
-      const parts = leadOut.split(/^###\s*([A-Z])\s*$/m)
-      for (let i = 1; i < parts.length; i += 2) if (parts[i] === tag(id)) return parts[i + 1].trim()
-      return leadOut
-    }
-    let failed = false, capped = false
-    const rows: Row[] = [] // filled as blocks finish; posted as one table when the run ends
-    const step = async (n: Node) => {
-      if (failed || stopped.current) return
-      if (rows.reduce((a, r) => a + r.use.cost, 0) >= RUN_CAP) { if (!capped) { capped = true; addLog({ from: '', to: '', kind: 'error', text: t('orchCap', { n: RUN_CAP }) }) } return }
-      const from = o.edges.filter((e) => e[1] === n.id).map((e) => byId.get(e[0])!)
-      const rules = from.filter((f) => f.kind === 'rules').map((f) => f.text).join('\n')
-      const inputs = from.filter((f) => f.kind !== 'rules').map((f) => `## ${f.kind === 'start' ? 'Lead' : label(f)}\n${f.kind === 'start' ? section(outs.get(f.id) ?? '', n.id) : clip(outs.get(f.id) ?? '')}`).join('\n\n')
-      const embedded = embed(n.notes)
-      let build: (resumed: boolean) => string, key: string, opts: Opts = {}
-      if (n.kind === 'start') {
-        // Who to address is derived from the links on the canvas, so the user never has to name anyone.
-        const to = o.edges.filter((e) => e[0] === n.id).map((e) => byId.get(e[1])!)
-        const list = to.map((f) => `- ${tag(f.id)}: ${label(f)}${f.text ? ` (context: ${f.text.slice(0, 160)})` : ''}`).join('\n')
-        const role = to.length
-          ? `You are the lead agent of an orchestra. Only you see the project map. Whatever the task or the user's message says, you ALWAYS brief EVERY agent below, none skipped. Answer ONLY with one section per agent, headed exactly "### A" (its letter), holding self-contained instructions: which notes/files to look at and what to produce. They never see the map or the task.\n\n# Agents\n${list}`
-          : 'You are the lead agent of an orchestra. Do the task.'
-        // Unchanging parts first so the prompt cache can reuse them; a resumed session already holds the dialogue (and the map, if unchanged).
-        // The lead sees the notes that match the task (and their neighbours) first, in a smaller budget.
-        const lmap = graphMap(notes, undefined, [o.task, n.text, msg].join(' '))
-        build = (resumed) => [`# Role\n${role}`, (!resumed || n.mapSum !== hash(lmap)) && `${MAP_INTRO}\n\n# Graph map\n${lmap}`, o.task && `# Task\n${o.task}`, n.text && `# Input\n${n.text}`, !resumed && history(n.id) && `# Conversation so far\n${history(n.id)}`, msg && `# Message from the user\n${msg}`].filter(Boolean).join('\n\n')
-        key = [role, lmap, o.task, n.text, msg].join('\0') // not the dialogue: it grows every run
-        opts = { keep: true, tools: to.length ? '' : undefined, effort: n.effort ?? 'low', mapSum: hash(lmap) } // a lead that only briefs agents needs no tools (it has the map) and little thinking
-      } else {
-        build = () => [rules && `# Rules\n${rules}`, !inputs && o.task && `# Task\n${o.task}`, n.text && `# Context\n${n.text}`, embedded && `# Notes\n${embedded}`, inputs && `# Input from previous agents\n${inputs}`]
-          .filter(Boolean).join('\n\n')
-        key = build(false)
-        opts = { effort: n.effort }
-      }
-      // blocks that can read the project also depend on its state: after the code changed their old answer is stale
-      const stamp = inTauri && n.agent !== 'deepseek' && n.agent !== 'nano' ? await worktreeStamp(o.iso ? o.id : undefined).catch(() => '') : ''
-      const sum = hash([n.agent ?? 'claude', n.model, n.effort, o.iso, stamp, key].join('\0')), old = prev.get(n.id)
-      if (!force && old?.state === 'ok' && old.out && old.sum === sum && (n.agent !== 'nano' || old.img)) { // same input as last time: reuse the answer, spend nothing
-        outs.set(n.id, old.out); const use = { input: 0, cached: 0, output: 0, cost: 0, same: true }
-        patch(n.id, { state: 'ok', out: old.out, img: old.img, sum, use }); rows.push({ who: who(n), use }); return
-      }
-      if (stopped.current) return
-      const given = from.filter((f) => f.kind !== 'rules').map((f) => (f.kind === 'start' ? section(outs.get(f.id) ?? '', n.id) : outs.get(f.id) ?? '')).join('\n\n') || n.text || o.task || (n.kind === 'start' ? t('orchLeadDefault') : '')
-      const sender = from.filter((f) => f.kind !== 'rules').map(who).join(', ') || t('orchUser')
-      if (!(n.kind === 'start' && msg)) addLog({ from: sender, to: who(n), toId: n.id, text: given, kind: 'task', quiet: from.length > 0 && from.every((f) => f.kind === 'model') }) // your message is already in the log; a model-to-model handoff is already shown as the sender's reply
-      patch(n.id, { state: 'run' })
-      try {
-        const { text: out, img, ...use } = await retry(() => exec(n, build, opts), () => stopped.current)
-        rows.push({ who: who(n), use })
-        outs.set(n.id, out); patch(n.id, { state: 'ok', out, img, sum, use, ...(opts.mapSum !== undefined && { mapSum: opts.mapSum }) })
-        const to = o.edges.filter((e) => e[0] === n.id).map((e) => who(byId.get(e[1])!)).join(', ') || t('orchUser')
-        addLog({ from: who(n), fromId: n.id, to, text: out, kind: 'reply', img })
-      } catch (e) {
-        const msg = String(e instanceof Error ? e.message : e)
-        patch(n.id, { state: 'err', out: msg }); addLog({ from: who(n), fromId: n.id, to: '', text: msg, kind: 'error' }); failed = true
-      }
-    }
-    // Each block waits only for its own inputs (parallel) or for the block before it (queue); `order` is topological, so those promises exist.
-    const done = new Map<string, Promise<void>>()
-    for (const [i, n] of order.entries()) {
-      const deps = o.queue ? [done.get(order[i - 1]?.id)] : o.edges.filter((e) => e[1] === n.id).map((e) => done.get(e[0]))
-      done.set(n.id, Promise.all(deps).then(() => step(n)))
-    }
-    await Promise.all(done.values())
-    // The agents report back: the lead reads what the last blocks answered and writes the final answer (once; it does not brief anyone again).
-    const sinks = order.filter((n) => n.kind === 'model' && outs.has(n.id) && !o.edges.some((e) => e[0] === n.id))
-    if (!failed && !stopped.current && sinks.length && o.edges.some((e) => e[0] === lead.id) && rows.reduce((a, r) => a + r.use.cost, 0) < RUN_CAP) {
-      const prompt = [`# Role\nYou are the lead agent of an orchestra. Your agents have reported back. Write the final answer to the task: merge their findings, say where they disagree, and what is still unknown. Do not brief anyone again.`,
-        o.task && `# Task\n${o.task}`, msg && `# Message from the user\n${msg}`, `# Reports\n${sinks.map((n) => `## ${who(n)}\n${clip(outs.get(n.id)!)}`).join('\n\n')}`].filter(Boolean).join('\n\n')
-      const fsum = hash(['final', lead.agent, lead.model, lead.effort, prompt].join('\0')), old = prev.get(lead.id)
-      const fin = `${who(lead)} · ${t('orchFinal')}`
-      try {
-        if (!force && old?.final && old.finalSum === fsum) {
-          patch(lead.id, { final: old.final, finalSum: fsum }); rows.push({ who: fin, use: { input: 0, cached: 0, output: 0, cost: 0, same: true } })
-          addLog({ from: fin, fromId: lead.id, to: t('orchUser'), text: old.final, kind: 'reply' })
-        } else {
-          patch(lead.id, { state: 'run' })
-          const { text: final, ...use } = await retry(() => exec(lead, () => prompt, { tools: '', effort: lead.effort ?? 'low' }), () => stopped.current)
-          rows.push({ who: fin, use }); patch(lead.id, { final, finalSum: fsum, state: 'ok' })
-          addLog({ from: fin, fromId: lead.id, to: t('orchUser'), text: final, kind: 'reply' })
-        }
-      } catch (e) {
-        patch(lead.id, { state: 'ok' }); addLog({ from: fin, fromId: lead.id, to: '', text: String(e instanceof Error ? e.message : e), kind: 'error' })
-      }
-    }
-    if (rows.length) addLog({ from: '', to: '', text: '', kind: 'usage', rows })
-    } finally { setRunning(false) }
+    setRunning(true)
+    try { await runOrchestra(o, deps(), { msg, force }) } finally { setRunning(false) }
   }
 
   // The saved dialogue as one agent saw it: what it was asked and what it answered.
@@ -309,7 +174,7 @@ ${clip(d)}
 
   // keep: continue the block's claude session (--resume) instead of resending the dialogue. agy gets the full prompt every time:
   // its --conversation resume was ~8x slower than a fresh call when tried.
-  const exec = async (n: Node, build: (resumed: boolean) => string, { keep, tools, effort = '' }: Opts = {}): Promise<Answer & { img?: string }> => {
+  const exec = async (n: Node, build: (resumed: boolean) => string, { keep, tools, effort = '', maxTurns }: Opts = {}): Promise<Reply> => {
     if (n.agent === 'nano') return nano(n.model ?? NANO[0][0], build(false))
     if (n.agent === 'deepseek') return deepseek(n.model ?? DEEPSEEK[0][0], build(false))
     if (!inTauri) throw new Error(t('desktopOnly'))
@@ -317,7 +182,7 @@ ${clip(d)}
     const go = async (resumed: boolean, session?: string) => {
       const prompt = build(resumed)
       if (!prompt.trim()) throw new Error(t('orchNoInput'))
-      const a = await runAgent(cli, prompt, n.model ?? MODELS.claude[0][0], cli !== 'claude' ? '' : effort, { session, resume: resumed, tools, system: BRIEF, budget: BUDGET, worktree: o.iso ? o.id : undefined })
+      const a = await runAgent(cli, prompt, n.model ?? MODELS.claude[0][0], cli !== 'claude' ? '' : effort, { session, resume: resumed, tools, system: BRIEF, budget: BUDGET, maxTurns, worktree: o.iso ? o.id : undefined })
       return { ...a, text: a.text.trim() }
     }
     if (cli !== 'claude' || !keep) return go(false)
@@ -336,8 +201,7 @@ ${clip(d)}
     if (!key) throw new Error(t('dsNoKey'))
     if (!prompt.trim()) throw new Error(t('orchNoInput'))
     const j = await dsChat(key, { model, messages: [{ role: 'system', content: BRIEF }, { role: 'user', content: prompt }] })
-    const u = j.usage ?? {}, cached = u.prompt_cache_hit_tokens ?? 0
-    return { text: String(j.choices?.[0]?.message?.content ?? '').trim(), input: (u.prompt_tokens ?? 0) - cached, cached, output: u.completion_tokens ?? 0, cost: 0 }
+    return { text: String(j.choices?.[0]?.message?.content ?? '').trim(), ...dsUsage(model, j.usage) }
   }
 
   // Nano Banana (Gemini image models): the answer is text plus an inline image, shown in the block and the dialogue.
@@ -346,7 +210,7 @@ ${clip(d)}
     if (!key) throw new Error(t('gemNoKey'))
     if (!prompt.trim()) throw new Error(t('orchNoInput'))
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseModalities: ['TEXT', 'IMAGE'] } }) })
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseModalities: ['TEXT', 'IMAGE'] } }), signal: AbortSignal.timeout(120_000) })
     const j = await r.json()
     if (!r.ok) throw new Error(j.error?.message ?? r.statusText)
     const parts = (j.candidates?.[0]?.content?.parts ?? []) as { text?: string; inlineData?: { mimeType: string; data: string } }[]
@@ -361,8 +225,13 @@ ${clip(d)}
   const ask = async (id: string, text: string) => {
     const n = o.nodes.find((x) => x.id === id)
     if (!n || running) return
-    if (n.kind === 'start') return run(text)
-    if (!(await isolate())) return // the lead never just answers: it briefs everyone again
+    if (n.kind === 'start' && !o.leadChat) return run(text) // by default the lead never just answers: it briefs everyone again
+    if (n.kind === 'start') { // "just answer": no tools, so no worktree is needed either
+      stopped.current = false; setRunning(true)
+      try { await leadChat(o, deps(), text) } finally { setRunning(false) }
+      return
+    }
+    if (!(await isolate())) return
     setRunning(true)
     addLog({ from: t('orchUser'), to: who(n), toId: id, text, kind: 'user' })
     patch(id, { state: 'run' })
@@ -373,7 +242,7 @@ ${clip(d)}
       // A resumed session already has its rules, notes and dialogue: send only the new message.
       const build = (resumed: boolean) => resumed ? text : [rules && `# Rules\n${rules}`, n.text && `# Context\n${n.text}`, embedded && `# Notes\n${embedded}`, own && `# Conversation so far\n${own.slice(-20000)}`, `# User message\n${text}`]
         .filter(Boolean).join('\n\n')
-      const { text: out, img, ...use } = await exec(n, build, { keep: true })
+      const { text: out, img, ...use } = await exec(n, build, { keep: true, effort: workerEffort(n), tools: n.tools, maxTurns: MAX_TURNS })
       patch(id, { state: 'ok', out, img, use, sum: undefined }); addLog({ from: who(n), fromId: id, to: t('orchUser'), text: out, kind: 'reply', img })
       addLog({ from: '', to: '', text: '', kind: 'usage', rows: [{ who: who(n), use }] })
     } catch (e) {
@@ -424,7 +293,7 @@ ${clip(d)}
                 {n.kind !== 'start' && <button title={t('delete')} onClick={() => remove(n.id)} className="p-1 rounded text-dim hover:text-status-err ml-auto"><X size={12} /></button>}
               </div>
               {n.kind !== 'rules' && <div className="flex items-center gap-1.5 px-5 py-1.5 border-b border-line min-w-0">
-                  <select value={`${n.agent ?? 'claude'}:${n.model ?? MODELS.claude[0][0]}`} onChange={(e) => { if (e.target.value.startsWith('preset:')) return patch(n.id, { ...resolve(PRESETS[+e.target.value.slice(7)]), role: PRESETS[+e.target.value.slice(7)][lang] }); const [agent, model] = e.target.value.split(':') as [Agent, string]; patch(n.id, { agent, model, role: undefined, ...(agent !== 'claude' && { effort: undefined }) }) }}
+                  <select value={`${n.agent ?? 'claude'}:${n.model ?? MODELS.claude[0][0]}`} onChange={(e) => { if (e.target.value.startsWith('preset:')) return patch(n.id, { ...resolve(PRESETS[+e.target.value.slice(7)]), role: PRESETS[+e.target.value.slice(7)][lang] }); const [agent, model] = e.target.value.split(':') as [Agent, string]; patch(n.id, { agent, model, role: undefined, tools: undefined, ...(agent !== 'claude' && { effort: undefined }) }) }}
                     className="min-w-0 bg-transparent text-micro outline-none text-mut">
                     <optgroup label={`★ ${lang === 'ru' ? 'Рекомендуемые' : 'Recommended'}`}>{PRESETS.map((p, i) => <option key={i} value={`preset:${i}`} className="bg-panel">{presetLabel(p)}</option>)}</optgroup>
                     {(['claude', 'agy', 'codex', 'deepseek', 'nano'] as const).map((a) => <optgroup key={a} label={NAMES[a]}>
@@ -439,6 +308,8 @@ ${clip(d)}
                   placeholder={n.kind === 'rules' ? t('orchRulesPh') : n.kind === 'start' ? t('orchStartPh') : t('orchCtxPh')} className={`${field} resize-none`} />
                 {n.kind !== 'rules' && (n.agent ?? 'claude') === 'claude' && <select value={n.effort ?? (n.kind === 'start' ? 'low' : '')} onChange={(e) => patch(n.id, { effort: e.target.value || undefined })} title={t('orchEffort')} className={field}>
                   {n.kind !== 'start' && <option value="">{t('orchEffort')}: auto</option>}{EFFORTS.map((x) => <option key={x} value={x}>{t('orchEffort')}: {x}</option>)}</select>}
+                {n.kind === 'model' && <select value={n.review ?? 0} onChange={(e) => patch(n.id, { review: +e.target.value || undefined })} title={t('orchReview')} className={field}>
+                  {[0, 1, 2, 3].map((x) => <option key={x} value={x}>{t('orchReview')}: {x ? x : t('orchOff')}</option>)}</select>}
                 {n.kind === 'start' && <span className="text-micro text-dim">{t('orchMapCtx', { n: notes.length, k: mapTok })}</span>}
                 {n.use && <span title={t('orchUseTip')} className="text-micro text-dim tabular-nums">{n.use.same ? t('orchSame') : `↑${k(n.use.input)} ⟳${k(n.use.cached)} ↓${k(n.use.output)}${n.use.cost > 0 ? ` · $${n.use.cost.toFixed(3)}` : ''}`}</span>}
                 {n.kind === 'start' && n.out && <pre className={`max-h-48 overflow-auto whitespace-pre-wrap text-micro p-2 rounded-lg bg-field ${n.state === 'err' ? 'text-status-err' : 'text-mut'}`}>{n.out}</pre>}
@@ -459,7 +330,7 @@ ${clip(d)}
         </div>
       </div>
     </div>
-    <Dialogue log={log} busy={running} onStop={() => { stopped.current = true; stopAgents().catch(console.error) }} queue={!!o.queue} onQueue={() => upd((c) => ({ ...c, queue: !c.queue }))} onSend={ask} onClear={() => upd((c) => ({ ...c, log: [], nodes: c.nodes.map((n) => ({ ...n, sid: undefined, mapSum: undefined, sum: undefined })) }))}
+    <Dialogue log={log} busy={running} onStop={() => { stopped.current = true; stopAgents().catch(console.error) }} queue={!!o.queue} onQueue={() => upd((c) => ({ ...c, queue: !c.queue }))} leadChat={!!o.leadChat} onLeadChat={() => upd((c) => ({ ...c, leadChat: !c.leadChat }))} onSend={ask} onClear={() => upd((c) => ({ ...c, log: [], nodes: c.nodes.map((n) => ({ ...n, sid: undefined, mapSum: undefined, sum: undefined })) }))}
       agents={o.nodes.filter((n) => n.kind !== 'rules').map((n) => ({ id: n.id, name: who(n), role: n.role ?? (n.kind === 'model' ? n.text.split(/\r?\n/)[0].slice(0, 60) : undefined), state: n.state, task: [...log].reverse().find((e) => e.kind === 'task' && e.toId === n.id)?.text }))} />
     </div>
   )
@@ -469,8 +340,8 @@ const DOT = { run: 'bg-accent animate-pulse', ok: 'bg-status-ok', err: 'bg-statu
 const hm = (at: number) => new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
 /** Replaces the chat sidebar on this tab: who is doing what, the saved dialogue between agents, and a box to write to any of them. */
-function Dialogue({ log, agents, busy, onStop, queue, onQueue, onSend, onClear }: {
-  log: Entry[]; busy: boolean; onStop: () => void; queue: boolean; onQueue: () => void; onSend: (id: string, text: string) => void; onClear: () => void
+function Dialogue({ log, agents, busy, onStop, queue, onQueue, leadChat, onLeadChat, onSend, onClear }: {
+  log: Entry[]; busy: boolean; onStop: () => void; queue: boolean; onQueue: () => void; leadChat: boolean; onLeadChat: () => void; onSend: (id: string, text: string) => void; onClear: () => void
   agents: { id: string; name: string; role?: string; state?: Node['state']; task?: string }[]
 }) {
   const { t } = useI18n()
@@ -523,7 +394,10 @@ function Dialogue({ log, agents, busy, onStop, queue, onQueue, onSend, onClear }
         <div ref={end} />
       </div>
       <div className="px-4 pt-3 pb-3 flex flex-col gap-2">
-        <button title={t(queue ? 'orchQueueTip' : 'orchParTip')} onClick={onQueue} className="btn-press self-start px-3 py-1 rounded-full border border-line text-xs text-dim hover:text-fg">{t(queue ? 'orchQueue' : 'orchPar')}</button>
+        <div className="flex gap-2">
+          <button title={t(queue ? 'orchQueueTip' : 'orchParTip')} onClick={onQueue} className="btn-press px-3 py-1 rounded-full border border-line text-xs text-dim hover:text-fg">{t(queue ? 'orchQueue' : 'orchPar')}</button>
+          {target === agents[0]?.id && <button title={t(leadChat ? 'orchChatTip' : 'orchRebriefTip')} onClick={onLeadChat} className="btn-press px-3 py-1 rounded-full border border-line text-xs text-dim hover:text-fg">{t(leadChat ? 'orchChatOnly' : 'orchRebrief')}</button>}
+        </div>
         <select value={target} onChange={(e) => setTo(e.target.value)} title={t('orchTo')}
           className="px-3 py-1.5 rounded-lg bg-field border border-line focus:border-accent outline-none text-xs">
           {agents.map((a) => <option key={a.id} value={a.id}>{t('orchTo')}: {a.name}</option>)}

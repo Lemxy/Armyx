@@ -74,7 +74,7 @@ export async function deleteNote(name: string, rest: Note[]) {
 }
 
 export type Answer = { text: string; input: number; cached: number; output: number; cost: number }
-export type AgentOpts = { session?: string; resume?: boolean; tools?: string; system?: string; budget?: number; worktree?: string }
+export type AgentOpts = { session?: string; resume?: boolean; tools?: string; system?: string; budget?: number; maxTurns?: number; worktree?: string }
 export const runAgent = (cli: string, prompt: string, model: string, effort: string, opts: AgentOpts = {}) => call<Answer>('run_agent', { cli, prompt, model, effort, ...opts })
 export const runAgentCli = (cli: string, prompt: string, model: string, effort: string) => runAgent(cli, prompt, model, effort).then((a) => a.text)
 // Isolated runs: agents work in a git worktree (id = the orchestra id) until you apply or discard what they changed.
