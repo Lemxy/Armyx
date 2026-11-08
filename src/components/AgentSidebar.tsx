@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowUp, Check, ChevronDown, Clock, Copy, CornerDownLeft, Plus, Sparkles, Trash2, X } from 'lucide-react'
+import { ArrowUp, Check, ChevronDown, Clock, Copy, CornerDownLeft, FolderOpen, Plus, Sparkles, Trash2, X } from 'lucide-react'
 import Segmented from './Segmented'
 import Markdown from './Markdown'
 import { useI18n } from '../i18n'
-import { graphMap, MAP_INTRO, tokens, type Note } from '../deso'
-import { agyModels, inTauri, runAgentCli } from '../vault'
+import { graphMap, MAP_INTRO, tokens, topHits, type Note } from '../deso'
+import { getKey, setKey } from '../keys'
+import { dsChat } from '../deepseek'
+import { agyModels, agyUsage, claudeUsage, inTauri, openRoot, runAgentCli } from '../vault'
 
-type Id = 'claude' | 'agy'
+type Id = 'claude' | 'agy' | 'deepseek'
 type Mode = 'cli' | 'api'
 type Msg = { role: 'user' | 'assistant'; text: string; at: number; error?: boolean; tin?: number; tout?: number }
 type Chat = { id: string; title: string; msgs: Msg[]; at: number }
@@ -14,12 +16,15 @@ type Chat = { id: string; title: string; msgs: Msg[]; at: number }
 const AGENTS = {
   claude: { label: 'Claude', cli: 'claude', key: 'Anthropic API Key' },
   agy: { label: 'Antigravity', cli: 'agy', key: 'Gemini API Key' },
+  deepseek: { label: 'DeepSeek', cli: '', key: 'DeepSeek API Key' }, // API only: no CLI
 } as const
 
 // [id, label]. Every model takes an effort level: Claude via output_config.effort, Gemini via a thinking budget.
-const MODELS = {
+export const MODELS = {
   claude: [['claude-sonnet-5-5', 'Claude Sonnet 5.5'], ['claude-opus-5-5', 'Claude Opus 5.5'], ['claude-haiku-5-5', 'Claude Haiku 5.5']],
-  agy: [['gemini-4-argon', 'Gemini 4 Argon'], ['gemini-3.8-flash', 'Gemini 3.8 Flash'], ['gemini-3.5-flash-lite', 'Gemini 3.5 Flash-Lite']],
+  agy: [['gemini-3.8-flash', 'Gemini 3.8 Flash'], ['gemini-3.5-flash-lite', 'Gemini 3.5 Flash-Lite']],
+  nano: [['gemini-2.5-flash-image', 'Nano Banana'], ['gemini-3-pro-image-preview', 'Nano Banana Pro']], // image models: used by the orchestra only
+  deepseek: [['deepseek-v4-flash', 'DeepSeek V4 Flash'], ['deepseek-v4-pro', 'DeepSeek V4 Pro'], ['deepseek-chat', 'DeepSeek V3 (chat)'], ['deepseek-reasoner', 'DeepSeek R1 (reasoner)']],
 } as const
 // [level, Gemini thinking budget]
 const EFFORTS = [['low', 1024], ['medium', 4096], ['high', 16384], ['max', 32768]] as const
@@ -27,7 +32,7 @@ const EFFORTS = [['low', 1024], ['medium', 4096], ['high', 16384], ['max', 32768
 // What the agent keeps in context: the newest turns that fit. Older turns stay in the saved chat, just not in the prompt.
 const MAX_TURNS = 24, MAX_CHARS = 30000
 const SYSTEM = (map: string) =>
-  `You are the assistant inside DesoVault, a knowledge-graph note app. ${MAP_INTRO} Be concise and answer in the user's language.\n\n# Graph map\n${map}`
+  `You are the assistant inside Taurium, a knowledge-graph note app. ${MAP_INTRO} Be concise and answer in the user's language.\n\n# Graph map\n${map}`
 
 const trim = (msgs: Msg[]) => {
   const ok = msgs.filter((m) => !m.error)
@@ -52,6 +57,10 @@ async function callApi(id: Id, key: string, system: string, msgs: Msg[], model: 
     if (!r.ok) throw new Error(j.error?.message ?? r.statusText)
     return (j.content as { type: string; text?: string }[]).filter((b) => b.type === 'text').map((b) => b.text).join('')
   }
+  if (id === 'deepseek') {
+    const j = await dsChat(key, { model, messages: [{ role: 'system', content: system }, ...msgs.map((m) => ({ role: m.role, content: m.text }))] })
+    return j.choices?.[0]?.message?.content ?? ''
+  }
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
     body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] },
@@ -72,7 +81,8 @@ const load = <T,>(k: string, d: T): T => { try { return JSON.parse(localStorage.
 const save = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.stringify(v)) } catch (e) { console.error(e) } }
 const CFG = 'desovault.agent'
 type Cfg = { id: Id; models: Record<Id, string>; modes: Record<Id, Mode>; effort: number }
-const DEFAULT: Cfg = { id: 'claude', models: { claude: MODELS.claude[0][0], agy: MODELS.agy[0][0] }, modes: { claude: inTauri ? 'cli' : 'api', agy: inTauri ? 'cli' : 'api' }, effort: 1 }
+type Row = { title?: string; k: 'usage5h' | 'usage7d'; pct: number; reset: string }
+const DEFAULT: Cfg = { id: 'claude', models: { claude: MODELS.claude[0][0], agy: MODELS.agy[0][0], deepseek: MODELS.deepseek[0][0] }, modes: { claude: inTauri ? 'cli' : 'api', agy: inTauri ? 'cli' : 'api', deepseek: 'api' }, effort: 1 }
 const uid = () => Math.random().toString(36).slice(2, 10)
 
 /** Reveals `text` progressively (~4s max) so replies appear typed. */
@@ -118,10 +128,13 @@ const ago = (at: number) => {
 export default function AgentSidebar({ notes, note, project, onInsert, onClose }: { notes: Note[]; note?: Note; project: string; onInsert: (t: string) => void; onClose: () => void }) {
   const { t } = useI18n()
   const [cfg, setCfg] = useState<Cfg>(() => ({ ...DEFAULT, ...load<Partial<Cfg>>(CFG, {}) }))
-  const [keys, setKeys] = useState<Record<Id, string>>({ claude: '', agy: '' }) // never persisted
+  const [keys, setKeys] = useState<Record<Id, string>>(() => ({ claude: getKey('claude'), agy: getKey('agy'), deepseek: getKey('deepseek') })) // kept in local storage (src/keys.ts)
   const [chats, setChats] = useState<Chat[]>(() => load<Chat[]>(`desovault.chats.${project}`, []))
   const [activeId, setActiveId] = useState(() => chats[0]?.id ?? '')
-  const [showCfg, setShowCfg] = useState(false)
+  const [showCfg, setShowCfg] = useState(true) // settings are visible on entry
+  const [plans, setPlans] = useState<Partial<Record<Id, Row[]>>>({})
+  const [planErr, setPlanErr] = useState<Partial<Record<Id, string>>>({})
+  const lastClaude = useRef(0)
   const [showHist, setShowHist] = useState(false)
   const [prompt, setPrompt] = useState('')
   const [busy, setBusy] = useState(false)
@@ -132,7 +145,7 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
   useEffect(() => { save(`desovault.chats.${project}`, chats) }, [chats, project])
 
   const { id, modes, effort } = cfg
-  const a = AGENTS[id], mode = modes[id], key = keys[id]
+  const a = AGENTS[id], mode: Mode = id === 'deepseek' ? 'api' : modes[id], key = keys[id]
   const [agyList, setAgyList] = useState<[string, string][]>([])
   useEffect(() => { if (inTauri) agyModels().then(setAgyList).catch(console.error) }, [])
   // `agy` in CLI mode: the models the installed CLI reports (its ids differ from the Gemini API's).
@@ -160,7 +173,12 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
     if (!chat) { cid = uid(); setChats((cs) => [{ id: cid, title: text.slice(0, 48), msgs: [user], at: Date.now() }, ...cs]); setActiveId(cid) }
     else patch(cid, (c) => ({ ...c, msgs: [...c.msgs, user], at: Date.now() }))
     setPrompt(''); setBusy(true)
-    const history = trim([...msgs, user])
+    // the map stays identical between questions (prompt-cacheable); the files closest to this question ride along with it
+    const hits = topHits(notes, text)
+    const history = trim([...msgs, user]).map((m) => (m === user && hits ? { ...m, text: `# Best matches
+${hits}
+
+${m.text}` } : m))
     const system = SYSTEM(map)
     const tin = tokens(system + history.map((m) => m.text).join('\n'))
     let reply: Msg
@@ -180,15 +198,55 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
   const scroll = () => end.current?.scrollIntoView({ block: 'end' })
   useEffect(() => { scroll() }, [msgs.length, busy])
 
+  // Both sources are normalised to "% used" rows. Claude: Anthropic's plan endpoint. Antigravity: the CLI's `/usage` (remaining_fraction per model group).
+  const refreshPlan = () => {
+    if (!inTauri) return
+    const done = (k: Id) => (rows: Row[]) => { setPlans((p) => ({ ...p, [k]: rows })); setPlanErr((e) => ({ ...e, [k]: '' })) }
+    const fail = (k: Id) => (e: unknown) => setPlanErr((p) => ({ ...p, [k]: String(e) })) // last good rows stay on screen
+    // Anthropic's plan endpoint rate-limits (429) when hit often, so Claude is fetched at most every 2 min.
+    if (Date.now() - lastClaude.current < 120000) return agyRefresh()
+    lastClaude.current = Date.now()
+    claudeUsage().then((r) => {
+      const j = JSON.parse(r)
+      done('claude')([['usage5h', j.five_hour], ['usage7d', j.seven_day]].flatMap(([k, w]) => w ? [{ k, pct: w.utilization, reset: w.resets_at } as Row] : []))
+    }).catch(fail('claude'))
+    agyRefresh()
+    function agyRefresh() {
+    agyUsage().then((r) => {
+      const groups = JSON.parse(r).command?.data?.groups ?? []
+      done('agy')(groups.flatMap((g: { name: string; buckets: { window: string; remaining_fraction: number; reset_time: string }[] }) =>
+        g.buckets.map((b) => ({ title: g.name, k: b.window === '5h' ? 'usage5h' : 'usage7d', pct: (1 - b.remaining_fraction) * 100, reset: b.reset_time } as Row))))
+    }).catch(fail('agy'))
+    }
+  }
+  useEffect(() => { if (!inTauri) return; refreshPlan(); const i = setInterval(refreshPlan, 300000); return () => clearInterval(i) }, [])
+  useEffect(() => { if (!busy) refreshPlan() }, [busy]) // numbers move after each reply
+  const Limits = () => {
+    const rows = plans[id]
+    return (
+      <div className="flex flex-col gap-2.5 pt-1">
+        <span className={label}>{t('usage')}</span>
+        {rows?.length ? rows.map((w, i) => (
+          <div key={i} className="flex flex-col gap-1">
+            {w.title && w.title !== rows[i - 1]?.title && <span className="text-micro text-fg pt-1">{w.title}</span>}
+            <div className="flex justify-between text-xs"><span>{t(w.k)}</span><span className="tabular-nums">{Math.round(w.pct)}%</span></div>
+            <div className="h-1.5 rounded-full bg-field overflow-hidden"><div className={`h-full rounded-full ${w.pct > 90 ? 'bg-status-err' : 'bg-accent'}`} style={{ width: `${Math.min(100, w.pct)}%` }} /></div>
+            <span className="text-micro text-dim">{t('resets')} {new Date(w.reset).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+          </div>
+        )) : <p className="text-micro text-dim">{planErr[id] || (inTauri ? '…' : t('desktopOnly'))}</p>}
+      </div>
+    )
+  }
   const label = 'text-micro text-dim'
   const icon = 'btn-press p-1.5 rounded-lg text-dim hover:text-fg hover:bg-panel'
-  const effortName = effortFixed ? '' : ` · ${t(EFFORTS[effort][0])}`
+  const effortName = effortFixed || id === 'deepseek' ? '' : ` · ${t(EFFORTS[effort][0])}`
 
   return (
-    <aside className="anim-fade w-[26rem] shrink-0 border-l border-line bg-surface flex flex-col text-sm relative">
+    <aside className="anim-slide w-[26rem] shrink-0 border-l border-line bg-surface flex flex-col text-sm relative">
       <div className="flex items-center gap-1 px-4 h-14 border-b border-line">
         <span className="font-serif text-lg font-semibold truncate">{chat?.title ?? t('chatNew')}</span>
         <span className="ml-auto flex items-center gap-1.5 text-micro text-dim mr-1 shrink-0"><span className={`w-1.5 h-1.5 rounded-full ${real ? 'bg-status-ok' : 'bg-accent'}`} />{status}</span>
+        <button onClick={() => openRoot().catch(console.error)} title={t('openFolder')} className={icon}><FolderOpen size={15} /></button>
         <button onClick={newChat} title={t('chatNew')} className={icon}><Plus size={15} /></button>
         <button onClick={() => setShowHist((v) => !v)} title={t('history')} className={`${icon} ${showHist ? 'bg-panel text-fg' : ''}`}><Clock size={15} /></button>
         <button onClick={onClose} title={t('close')} className={icon}><X size={15} /></button>
@@ -217,8 +275,8 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
       {showCfg && (
         <div className="anim-rise px-5 pt-3 pb-5 flex flex-col gap-3.5 border-b border-line">
           <div className="flex flex-col gap-1.5"><span className={label}>Agent</span><Segmented<Id> value={id} onChange={(k) => set({ id: k })} options={(Object.keys(AGENTS) as Id[]).map((k) => [k, AGENTS[k].label] as const)} /></div>
-          <div className="flex flex-col gap-1.5"><span className={label}>Mode</span><Segmented<Mode> value={mode} onChange={(m) => set({ modes: { ...modes, [id]: m } })} options={[['cli', t('modeCli')], ['api', t('modeApi')]]} /></div>
-          {mode === 'api' && <input type="password" value={key} onChange={(e) => setKeys((s) => ({ ...s, [id]: e.target.value }))} placeholder={a.key}
+          {id !== 'deepseek' && <div className="flex flex-col gap-1.5"><span className={label}>Mode</span><Segmented<Mode> value={mode} onChange={(m) => set({ modes: { ...modes, [id]: m } })} options={[['cli', t('modeCli')], ['api', t('modeApi')]]} /></div>}
+          {mode === 'api' && <input type="password" value={key} onChange={(e) => { setKey(id, e.target.value); setKeys((s) => ({ ...s, [id]: e.target.value })) }} placeholder={a.key}
             className="px-3.5 py-2 rounded-xl bg-field border border-line focus:border-accent outline-none text-sm placeholder:text-dim" />}
           <label className="flex flex-col gap-1.5"><span className={label}>{t('model')}</span>
             <select value={model} onChange={(e) => set({ models: { ...cfg.models, [id]: e.target.value } })}
@@ -226,12 +284,13 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
               {list.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
           </label>
-          <div className="flex flex-col gap-1.5">
+          {id !== 'deepseek' && <div className="flex flex-col gap-1.5">
             <span className={label}>{t('reasoning')}</span>
             {effortFixed
               ? <p className="px-3.5 py-2.5 rounded-xl bg-field border border-line text-micro leading-relaxed text-dim">{t('effortInName')}</p>
               : <Segmented value={String(effort)} onChange={(v) => set({ effort: +v })} options={EFFORTS.map(([k], i) => [String(i), t(k)] as const)} />}
-          </div>
+          </div>}
+          {id !== 'deepseek' && <Limits />}
         </div>
       )}
 

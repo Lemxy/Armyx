@@ -1,0 +1,202 @@
+[
+ {
+  "q": "Which file defines the Python function documented as: \"Identify and delete duplicated statistics_meta.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/recorder/auto_repairs/statistics/duplicates.py",
+  "verify": "delete_statistics_meta_duplicates"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Implements Alexa.LockController.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/alexa/capabilities.py",
+  "verify": "AlexaLockController"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Define the format of device_trigger modules.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/device_automation/trigger.py",
+  "verify": "DeviceAutomationTriggerProtocol"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Entity representing the inverter clock synchronization button.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/goodwe/button.py",
+  "verify": "GoodweButtonEntity"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Example auth provider based on hardcoded usernames and passwords.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/auth/providers/insecure_example.py",
+  "verify": "ExampleAuthProvider"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Apply a Supervisor panel push to cached data without touching refresh state.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/hassio/coordinator.py",
+  "verify": "async_push_panel"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Build a plane subentry title from its declination/azimuth/power.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/forecast_solar/plane.py",
+  "verify": "plane_title"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Coordinator that refreshes readings for a single device every 10 minutes.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/freshr/coordinator.py",
+  "verify": "FreshrReadingsCoordinator"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Representation of a fibaro cover which supports only open / close commands.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/fibaro/cover.py",
+  "verify": "FibaroCover"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Key each energy value by the start of its period.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/forecast_solar/coordinator.py",
+  "verify": "energy_by_period_start"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Representation of a flux config entity that only updates at start or change.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/flux_led/select.py",
+  "verify": "FluxConfigAtStartSelect"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Implement a notification service for the Free Mobile SMS service.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/free_mobile/notify.py",
+  "verify": "FreeSMSNotificationService"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Start a reauth flow if Android TV is hard reset while reconnecting.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/androidtv_remote/__init__.py",
+  "verify": "reauth_needed"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Representation of an Enphase storage settings switch entity.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/enphase_envoy/switch.py",
+  "verify": "EnvoyStorageSettingsSwitchEntity"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Load the registries and modules that will do blocking I/O.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/bootstrap.py",
+  "verify": "async_load_base_functionality"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Generate the name to show in the site drop down in the configuration flow.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/amberelectric/config_flow.py",
+  "verify": "generate_site_selector_name"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Coordinator for device status, updating with a frequent interval.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/aosmith/coordinator.py",
+  "verify": "AOSmithStatusCoordinator"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Add a property to the response context.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/alexa/state_report.py",
+  "verify": "add_context_property"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Current cached to-do list items (list_id -> item_id -> AmazonListItem).\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/alexa_devices/coordinator.py",
+  "verify": "todo_list_items"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Return capabilityResources object serialized for an API response.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/alexa/resources.py",
+  "verify": "serialize_capability_resources"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Publish the client's optimistic state after a successful mutation.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/any_list/coordinator.py",
+  "verify": "async_update_from_client"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Return whether an authorization error reports a rejected app token.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/freebox/router.py",
+  "verify": "is_invalid_token_error"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Sensor for a FinTS holdings account.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/fints/sensor.py",
+  "verify": "FinTsHoldingsAccount"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Implement the notification entity platform for the File service.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/file/notify.py",
+  "verify": "FileNotifyEntity"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Representation of an EnOcean window handle device.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/enocean/sensor.py",
+  "verify": "EnOceanWindowHandle"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Representation of the rotation position of a single Flic Twist mode.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/flic_button/number.py",
+  "verify": "FlicTwistNumberEntity"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Entity description class for sensors using data from the status coordinator.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/aosmith/sensor.py",
+  "verify": "AOSmithStatusSensorEntityDescription"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Store and coordinate the data retrieved from APCUPSd for all sensors.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/apcupsd/coordinator.py",
+  "verify": "APCUPSdCoordinator"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"If the value ends with any of the units from supported units.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/apcupsd/sensor.py",
+  "verify": "infer_unit"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Return whether a TTS model accepts per-turn speech metadata like style.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/google_generative_ai_conversation/entity.py",
+  "verify": "supports_speech_metadata"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Return the color temperature range in Kelvin a device supports.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/elgato/helpers.py",
+  "verify": "color_temperature_range"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Coordinator for fetching Google Photos albums.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/google_photos/coordinator.py",
+  "verify": "GooglePhotosUpdateCoordinator"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Representation an AirPlay device via an iTunes API instance.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/itunes/media_player.py",
+  "verify": "AirPlayDevice"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Alpha Bidet IR select entity for a setting sent as an absolute level.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/alpha_bidet_infrared/select.py",
+  "verify": "AlphaBidetIrSelect"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Never install a version automatically.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/hassio/auto_update.py",
+  "verify": "async_skip_version"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Serve raster tiles, for devices that cannot render vector ones.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/map_tiles/views.py",
+  "verify": "MapTilesRasterView"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Get all characteristics that can be polled.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/homekit_controller/connection.py",
+  "verify": "get_all_pollable_characteristics"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Profile fitbit authentication before a ConfigEntry exists.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/fitbit/api.py",
+  "verify": "ConfigFlowFitbitApi"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Schedule a task that restarts the managed add-on.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/hassio/addon_manager.py",
+  "verify": "async_schedule_restart_addon"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"DataUpdateCoordinator to gather data for a specific flux_led device.\"? Reply with the repo-relative path only.",
+  "expect": "homeassistant/components/flux_led/coordinator.py",
+  "verify": "FluxLedUpdateCoordinator"
+ }
+]

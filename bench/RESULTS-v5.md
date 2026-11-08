@@ -78,3 +78,7 @@ Small project (Armyx, 78 notes, 10 q x 2, haiku): alone $0.0228 (52 turns) vs ho
 NovaFull (836 files, 30 q x 1): plain 28/30, $0.00204/q, 101 turns; armyx 30/30, $0.00141/q (-31%), 76 turns, 7.2 s vs 8.8 s per question. Armyx repo (78 files, 10 q x 2): plain 20/20 $0.00121/q; armyx 20/20 $0.00151/q (+25%, the map is delivered by hook and costs more than it saves), 32 turns vs 51, 5.4 s vs 6.9 s. Noise is about +-10-15% at this size.
 
 Correction: the "51k -> 7.6k tokens from switching off claude.ai connectors" measured earlier did not reproduce (now ~6.2k either way, the connectors are no longer connected in the CLI): it depends on the state of your account.
+
+## Update: the plugin is gone
+
+Armyx is used as the Rust program (app and scanner) plus the hooks in `mcp/`. `plugin/armyx`, the `/armyx` commands, `mcp/build-plugin.mjs` and `mcp/armyx-ctl.mjs` were removed; the hook results above still hold. Wire a project with `node mcp/setup.mjs <project> <graph dir>` (installs SessionStart, SubagentStart and UserPromptSubmit hooks); off switch: `.armyx/off` or `ARMYX=0`; debt list: `node mcp/debt.mjs <dirs>`; graph: `cargo run --example scan -- <project> <graph dir>` in `src-tauri`.

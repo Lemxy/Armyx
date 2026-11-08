@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Gauge, Network, PenLine, Settings, Sparkles } from 'lucide-react'
+import { Gauge, Network, PenLine, Settings, Sparkles, Workflow } from 'lucide-react'
 import { mapVsSource, savings, type Note } from './deso'
 import { backend, deleteNote, inTauri, loadNotes, rescanProject, saveNote, activeProject, switchProject } from './vault'
 import { useI18n } from './i18n'
@@ -10,11 +10,12 @@ import Editor from './components/Editor'
 import CircuitGraph from './components/CircuitGraph'
 import TokenInspector from './components/TokenInspector'
 import ContextMenu, { type MenuItem, type MenuState } from './components/ContextMenu'
+import Orchestra from './components/Orchestra'
 import AgentSidebar from './components/AgentSidebar'
 import Modal from './components/Modal'
 import Segmented from './components/Segmented'
 
-const TABS = [['editor', 'editor', PenLine], ['graph', 'graph', Network], ['tokens', 'tokensTab', Gauge]] as const
+const TABS = [['editor', 'editor', PenLine], ['graph', 'graph', Network], ['orchestra', 'orchestra', Workflow], ['tokens', 'tokensTab', Gauge]] as const
 type Tab = (typeof TABS)[number][0]
 
 export default function App() {
@@ -28,7 +29,7 @@ export default function App() {
     return TABS.some((x) => x[0] === q) ? (q as Tab) : 'editor'
   })
   const [menu, setMenu] = useState<MenuState | null>(null)
-  const [agents, setAgents] = useState(new URLSearchParams(window.location.search).get('agents') === '1')
+  const [agents, setAgents] = useState(new URLSearchParams(window.location.search).get('agents') !== '0') // open by default
   const [deleting, setDeleting] = useState('')
   const [creating, setCreating] = useState(false)
   // Pending debounced saves, one per note, so edits to different notes never cancel each other.
@@ -106,22 +107,25 @@ export default function App() {
         onMenu={showMenu} onCopy={copyLink} onDelete={setDeleting} onProjects={() => setModal('project')} onRescan={inTauri ? () => rescan().catch(console.error) : undefined} />
       <main className="flex-1 flex flex-col min-w-0">
         <nav className="flex items-center gap-4 px-5 h-14 border-b border-line bg-surface">
-          <Segmented<Tab> value={tab} onChange={setTab} className="w-[27rem]"
+          <Segmented<Tab> value={tab} onChange={setTab} className="w-[36rem] min-w-0 shrink"
             options={TABS.map(([id, label, Icon]) => [id, <><Icon size={13} />{t(label)}</>] as const)} />
           <span title={scanned ? t('mapTip') : backend} className="ml-auto text-micro text-dim tabular-nums">
             {scanned
               ? <>{t('mapBadge', { m: k(scanned.map), s: k(scanned.src) })}</>
               : <><span className="font-serif text-base font-semibold text-accent">−{total.pct}%</span> {t('tokens')} {t('tokSaved')}</>}
           </span>
-          <button onClick={() => setAgents((a) => !a)} title={t('agentsTitle')}
+          {tab !== 'orchestra' && <button onClick={() => setAgents((a) => !a)} title={t('agentsTitle')}
             className={`btn-press flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-xs ${agents ? 'border-accent text-accent bg-accent-dim' : 'border-line text-mut hover:text-fg hover:border-line2'}`}>
             <Sparkles size={13} />{t('agents')}
-          </button>
+          </button>}
           <button onClick={() => setModal('settings')} title={t('settings')} className={iconBtn}><Settings size={15} /></button>
         </nav>
-        <div key={tab} className="flex-1 min-h-0 anim-fade">
+        {/* Always mounted (just hidden) so a running orchestra keeps working while you are on another tab. */}
+        <div className={`flex-1 min-h-0 ${tab === 'orchestra' ? '' : 'hidden'}`}><Orchestra key={project} notes={notes} project={project} onMenu={showMenu} /></div>
+        <div key={tab} className={`flex-1 min-h-0 anim-fade ${tab === 'orchestra' ? 'hidden' : ''}`}>
           {tab === 'graph' ? <CircuitGraph notes={notes} current={current} onOpen={open} onNew={create}
               onMenu={showMenu} onCopy={copyLink} onDelete={setDeleting} project={project} />
+            : tab === 'orchestra' ? null
             : !note ? (
               <div className="h-full flex flex-col items-center justify-center gap-4 text-center anim-rise">
                 <svg width="44" height="44" viewBox="0 0 18 18" fill="none" stroke="var(--accent)" strokeWidth=".6" aria-hidden>
@@ -135,7 +139,7 @@ export default function App() {
             : <TokenInspector note={note} scanned={scanned} />}
         </div>
       </main>
-      {agents && <AgentSidebar key={project} notes={notes} note={note} project={project} onClose={() => setAgents(false)}
+      {agents && tab !== 'orchestra' && <AgentSidebar key={project} notes={notes} note={note} project={project} onClose={() => setAgents(false)}
         onInsert={(x) => note && update(note.name, note.content.replace(/\n*$/, '\n') + x + '\n')} />}
       {modal === 'settings' && <SettingsModal onClose={() => setModal(null)} />}
       {modal === 'project' && <ProjectModal active={project} onSwitch={changeProject} onClose={() => setModal(null)} />}

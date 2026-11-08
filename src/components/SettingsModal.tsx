@@ -2,12 +2,13 @@ import { useState } from 'react'
 import { useI18n, type Lang } from '../i18n'
 import Modal from './Modal'
 import Segmented from './Segmented'
+import { getKey, setKey } from '../keys'
 
 const label = 'text-micro text-dim'
 
 export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const { t, lang, setLang, smooth, setSmooth } = useI18n()
-  const [theme, setTheme] = useState(document.documentElement.dataset.theme === 'light' ? 'light' : 'dark')
+  const [theme, setTheme] = useState(document.documentElement.dataset.theme ?? 'steel')
   const pick = (v: string) => { document.documentElement.dataset.theme = v; localStorage.setItem('deso_theme', v); setTheme(v) }
   return (
     <Modal title={t('settings')} onClose={onClose}>
@@ -17,7 +18,18 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
       </div>
       <div className="flex flex-col gap-2">
         <span className={label}>{t('theme')}</span>
-        <Segmented value={theme} onChange={pick} options={[['dark', t('dark')], ['light', t('light')]]} />
+        <Segmented value={theme} onChange={pick} options={[['steel', t('steel')], ['dark', t('dark')], ['light', t('light')]]} />
+      </div>
+      {([['deepseek', t('dsKey')], ['agy', t('gemKey')]] as const).map(([id, name]) => (
+        <div key={id} className="flex flex-col gap-2">
+          <span className={label}>{name}</span>
+          <input type="password" defaultValue={getKey(id)} onChange={(e) => setKey(id, e.target.value)} placeholder={id === 'agy' ? 'AIza…' : 'sk-…'} autoComplete="off"
+            className="px-3 py-2 rounded-lg bg-field border border-line focus:border-accent outline-none text-sm placeholder:text-dim" />
+        </div>))}
+      <div className="flex flex-col gap-2">
+        <span className={label}>DeepSeek gateway URL (OpenAI-compatible)</span>
+        <input defaultValue={getKey('dsGateway')} onChange={(e) => setKey('dsGateway', e.target.value)} placeholder="https://your-gateway.com/v1" autoComplete="off"
+          className="px-3 py-2 rounded-lg bg-field border border-line focus:border-accent outline-none text-sm placeholder:text-dim" />
       </div>
       <button role="switch" aria-checked={smooth} onClick={() => setSmooth(!smooth)} className="flex items-center gap-4 text-left pt-1">
         <span className="flex-1">

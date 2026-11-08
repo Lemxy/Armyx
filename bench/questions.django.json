@@ -1,0 +1,202 @@
+[
+ {
+  "q": "Which file defines the Python function documented as: \"Add a new post-rendering callback.\"? Reply with the repo-relative path only.",
+  "expect": "django/template/response.py",
+  "verify": "add_post_render_callback"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"The user tried to call a sync-only function from an async context.\"? Reply with the repo-relative path only.",
+  "expect": "django/core/exceptions.py",
+  "verify": "SynchronousOnlyOperation"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"A modified version of Sphinx-lint's line-too-long check.\"? Reply with the repo-relative path only.",
+  "expect": "docs/lint.py",
+  "verify": "check_line_too_long_django"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Create directories recursively with `mode` on each newly created level.\"? Reply with the repo-relative path only.",
+  "expect": "django/utils/_os.py",
+  "verify": "safe_makedirs"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Convert multiple spaces to single and strip from both sides.\"? Reply with the repo-relative path only.",
+  "expect": "django/contrib/postgres/search.py",
+  "verify": "normalize_spaces"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Return whether this workflow has already explained the PR limit.\"? Reply with the repo-relative path only.",
+  "expect": "scripts/pr_limit/check_pr.py",
+  "verify": "comment_exists"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Invalid to_field was passed to admin view via URL query string\"? Reply with the repo-relative path only.",
+  "expect": "django/contrib/admin/exceptions.py",
+  "verify": "DisallowedModelAdminToField"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Raise an error if expression cannot be used in a WHERE clause.\"? Reply with the repo-relative path only.",
+  "expect": "django/db/models/sql/query.py",
+  "verify": "check_filterable"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Add an 'initial' prefix for checking dynamic initial values.\"? Reply with the repo-relative path only.",
+  "expect": "django/forms/forms.py",
+  "verify": "add_initial_prefix"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"The first five items in the Checklist section must be checked.\"? Reply with the repo-relative path only.",
+  "expect": "scripts/pr_quality/check_pr.py",
+  "verify": "check_checklist"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Return list of Fields given path relative to model.\"? Reply with the repo-relative path only.",
+  "expect": "django/contrib/admin/utils.py",
+  "verify": "get_fields_from_path"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Validate that the string doesn't contain the null character.\"? Reply with the repo-relative path only.",
+  "expect": "django/core/validators.py",
+  "verify": "ProhibitNullCharactersValidator"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Save and return an existing model instance for the given form.\"? Reply with the repo-relative path only.",
+  "expect": "django/forms/models.py",
+  "verify": "save_existing"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Create an index using PostgreSQL's CREATE INDEX CONCURRENTLY syntax.\"? Reply with the repo-relative path only.",
+  "expect": "django/contrib/postgres/operations.py",
+  "verify": "AddIndexConcurrently"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Return the number of errors across all forms in the formset.\"? Reply with the repo-relative path only.",
+  "expect": "django/forms/formsets.py",
+  "verify": "total_error_count"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Normalize choices values consistently for fields and widgets.\"? Reply with the repo-relative path only.",
+  "expect": "django/utils/choices.py",
+  "verify": "normalize_choices"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Encapsulate backend-specific methods for opening a client shell.\"? Reply with the repo-relative path only.",
+  "expect": "django/db/backends/base/client.py",
+  "verify": "BaseDatabaseClient"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Return a numeric identifier of the latest git changeset.\"? Reply with the repo-relative path only.",
+  "expect": "django/utils/version.py",
+  "verify": "get_git_changeset"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Delete a remote branch from origin and the maching local branch.\"? Reply with the repo-relative path only.",
+  "expect": "scripts/archive_eol_stable_branches.py",
+  "verify": "delete_remote_and_local_branch"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Clear the internal translations cache if a .mo file is modified.\"? Reply with the repo-relative path only.",
+  "expect": "django/utils/translation/reloader.py",
+  "verify": "translation_file_changed"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Class representing a Django application and its configuration.\"? Reply with the repo-relative path only.",
+  "expect": "django/apps/config.py",
+  "verify": "AppConfig"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Take a phone number and converts it in to its numerical equivalent.\"? Reply with the repo-relative path only.",
+  "expect": "django/template/defaultfilters.py",
+  "verify": "phone2numeric_filter"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Parse a string and return a datetime.date.\"? Reply with the repo-relative path only.",
+  "expect": "django/utils/dateparse.py",
+  "verify": "parse_date"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Return the GEOS version as a tuple (major, minor, subminor).\"? Reply with the repo-relative path only.",
+  "expect": "django/contrib/gis/geos/libgeos.py",
+  "verify": "geos_version_tuple"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Trim string `value` to `limit` characters.\"? Reply with the repo-relative path only.",
+  "expect": "django/utils/text.py",
+  "verify": "trim_value"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Determine if the object instance is of a protected type.\"? Reply with the repo-relative path only.",
+  "expect": "django/utils/encoding.py",
+  "verify": "is_protected_type"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Get the number of seconds until the session expires.\"? Reply with the repo-relative path only.",
+  "expect": "django/contrib/sessions/backends/base.py",
+  "verify": "get_expiry_age"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Parse a DJANGO_COLORS environment variable to produce the system palette\"? Reply with the repo-relative path only.",
+  "expect": "django/utils/termcolors.py",
+  "verify": "parse_color_setting"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Return True if function 'func' accepts a (keyword) argument 'name'.\"? Reply with the repo-relative path only.",
+  "expect": "django/utils/inspect.py",
+  "verify": "func_supports_parameter"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"View for updating an object, with a response rendered by a template.\"? Reply with the repo-relative path only.",
+  "expect": "django/views/generic/edit.py",
+  "verify": "UpdateView"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Yield stripped parts of an HTTP header value split by sep.\"? Reply with the repo-relative path only.",
+  "expect": "django/utils/http.py",
+  "verify": "split_header_value"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Turn a plaintext password into a hash for database storage.\"? Reply with the repo-relative path only.",
+  "expect": "django/contrib/auth/hashers.py",
+  "verify": "make_password"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Turn a value into a bytestring encoded in the output charset.\"? Reply with the repo-relative path only.",
+  "expect": "django/http/response.py",
+  "verify": "make_bytes"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Base class for task-related exceptions. Do not raise directly.\"? Reply with the repo-relative path only.",
+  "expect": "django/tasks/exceptions.py",
+  "verify": "TaskException"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Stub of an AppConfig. Only provides a label and a dict of models.\"? Reply with the repo-relative path only.",
+  "expect": "django/db/migrations/state.py",
+  "verify": "AppConfigStub"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Override the Content-Security-Policy-Report-Only header for a view.\"? Reply with the repo-relative path only.",
+  "expect": "django/views/decorators/csp.py",
+  "verify": "csp_report_only_override"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"An applied migration has some of its dependencies not applied.\"? Reply with the repo-relative path only.",
+  "expect": "django/db/migrations/exceptions.py",
+  "verify": "InconsistentMigrationHistory"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Create a technical 404 error response. `exception` is the Http404.\"? Reply with the repo-relative path only.",
+  "expect": "django/views/debug.py",
+  "verify": "technical_404_response"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Error if language settings are not consistent with each other.\"? Reply with the repo-relative path only.",
+  "expect": "django/core/checks/translation.py",
+  "verify": "check_language_settings_consistent"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Encapsulate all admin options and functionality for a given model.\"? Reply with the repo-relative path only.",
+  "expect": "django/contrib/admin/options.py",
+  "verify": "ModelAdmin"
+ }
+]

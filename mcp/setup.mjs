@@ -1,6 +1,6 @@
 // One command to wire a project: writes <project>/.claude/settings.local.json (local, not committed) with
-//   - the graph hooks (map once per session, best matches and skills per prompt) with no matcher, so a /compact brings the map back
-//   - ENABLE_CLAUDEAI_MCP_SERVERS=false, which drops the claude.ai connectors (about 44k tokens per call in our measurement)
+//   - the graph hooks (map once per session and for each subagent, best matches and skills per prompt) with no matcher, so a /compact brings the map back
+//   - ENABLE_CLAUDEAI_MCP_SERVERS=false, which drops the claude.ai connectors (a big saving while they are connected: ~44k tokens per call once; it did not reproduce later, when they were not)
 // Existing settings are kept; running it twice changes nothing.
 //   node mcp/setup.mjs <project dir> <graph dir> [--tools <skill notes dir>] [--keep-connectors]
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -13,7 +13,7 @@ const ours = (c) => c.includes(hook)
 export const configure = (settings, { graph, tools, keepConnectors }) => {
   const cmd = (mode) => `node --experimental-strip-types --no-warnings "${hook}" "${graph}" ${mode}${mode === 'prompt' && tools ? ` "${tools}"` : ''}`
   const out = { ...settings, hooks: { ...settings.hooks }, env: { ...settings.env } }
-  for (const [event, mode] of [['SessionStart', 'session'], ['UserPromptSubmit', 'prompt']]) {
+  for (const [event, mode] of [['SessionStart', 'session'], ['SubagentStart', 'subagent'], ['UserPromptSubmit', 'prompt']]) {
     const others = (out.hooks[event] ?? []).filter((g) => !g.hooks?.some((h) => ours(h.command ?? '')))
     out.hooks[event] = [...others, { hooks: [{ type: 'command', command: cmd(mode) }] }]
   }

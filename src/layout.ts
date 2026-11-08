@@ -3,7 +3,7 @@ export type P = { x: number; y: number }
 export type Edge = { from: string; to: string }
 
 /** Left-to-right layers: each note sits one column right of the deepest note linking to it. */
-export function layout(names: string[], edges: Edge[]): Record<string, P> {
+export function layout(names: string[], edges: Edge[], tree = false): Record<string, P> {
   const parents = new Map(names.map((n) => [n, [] as string[]]))
   for (const e of edges) parents.get(e.to)?.push(e.from)
   const kids = new Map(names.map((n) => [n, [] as string[]]))
@@ -30,6 +30,11 @@ export function layout(names: string[], edges: Edge[]): Record<string, P> {
     // order by average row of parents so links cross as little as possible
     const bary = (n: string) => { const r = parents.get(n)!.filter((p) => row.has(p)).map((p) => row.get(p)!); return r.length ? r.reduce((a, b) => a + b) / r.length : Infinity }
     layer.sort((a, b) => bary(a) - bary(b) || a.localeCompare(b))
+    if (tree) { // family tree: one generation per row, parents above children
+      layer.forEach((n, j) => { row.set(n, j); out[n] = { x: (j - (layer.length - 1) / 2) * 260, y: x } })
+      x += 200
+      continue
+    }
     const h = Math.min(layer.length, ROWS) * ROW
     layer.forEach((n, j) => {
       row.set(n, j)

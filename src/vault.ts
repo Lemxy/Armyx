@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { documentDir, join } from '@tauri-apps/api/path'
 import { open } from '@tauri-apps/plugin-dialog'
 import type { Note } from './deso'
+import { welcomeNote } from './welcome'
 
 const KEY = 'desovault.notes'
 const PROJECTS = 'desovault.projects', ACTIVE = 'desovault.active'
@@ -52,10 +53,12 @@ export async function loadNotes(): Promise<Note[]> {
 export async function switchProject(id: string) {
   id = id.trim()
   if (inTauri) id = await call<string>('set_root', { path: id })
+  const isNew = !listProjects().includes(id) // only a brand-new project gets the guide, so deleting it later sticks
   localStorage.setItem(PROJECTS, JSON.stringify([...new Set([...listProjects(), id])]))
   localStorage.setItem(ACTIVE, id)
-  const w = { name: 'welcome', content: '# welcome\n' }
-  if (!(await loadNotes()).length) await saveNote(w, [w])
+  const found = await loadNotes() // a code folder is scanned into a graph here
+  if (isNew && !found.some((n) => n.name === 'welcome')) { const w = welcomeNote(); await saveNote(w, [...found, w]) }
+  else if (!found.length) { const w = { name: 'welcome', content: '# welcome\n' }; await saveNote(w, [w]) }
 }
 
 // Browser mode persists the whole vault; Tauri mode writes only the changed file.
@@ -69,7 +72,14 @@ export async function deleteNote(name: string, rest: Note[]) {
   else localStorage.setItem(store(activeProject()), JSON.stringify(rest))
 }
 
-export const runAgentCli = (cli: string, prompt: string, model: string, effort: string) => call<string>('run_agent', { cli, prompt, model, effort })
+export type Answer = { text: string; input: number; cached: number; output: number; cost: number }
+export type AgentOpts = { session?: string; resume?: boolean; tools?: string; system?: string; budget?: number }
+export const runAgent = (cli: string, prompt: string, model: string, effort: string, opts: AgentOpts = {}) => call<Answer>('run_agent', { cli, prompt, model, effort, ...opts })
+export const runAgentCli = (cli: string, prompt: string, model: string, effort: string) => runAgent(cli, prompt, model, effort).then((a) => a.text)
+export const stopAgents = () => call<void>('stop_agents')
+export const openRoot = () => call<void>('open_root')
+export const claudeUsage = () => call<string>('claude_usage')
+export const agyUsage = () => call<string>('agy_usage')
 export const agyModels = () => call<[string, string][]>('agy_models')
 
 // ---- Project management ----
@@ -77,17 +87,17 @@ const saveList = (l: string[]) => localStorage.setItem(PROJECTS, JSON.stringify(
 
 /** Native folder picker (desktop only). Resolves null when cancelled. */
 export async function pickFolder(): Promise<string | null> {
-  const r = await open({ directory: true, multiple: false, title: 'DesoVault' })
+  const r = await open({ directory: true, multiple: false, title: 'Taurium' })
   return typeof r === 'string' ? r : null
 }
 
 export const badProjectName = (n: string) => !n.trim() || /[\/:*?"<>|]/.test(n) || n.trim().startsWith('.')
 
-/** Desktop: new projects live in Documents/DesoVault/<name>. Browser: the name is the id. */
+/** Desktop: new projects live in Documents/Taurium/<name>. Browser: the name is the id. */
 export async function newProjectId(name: string): Promise<string> {
   name = name.trim()
   if (!inTauri) return name
-  return join(await documentDir(), 'DesoVault', name)
+  return join(await documentDir(), 'Taurium', name)
 }
 
 /** Forget a project. Desktop: files stay on disk. Browser: its stored notes are deleted. Never the active one. */

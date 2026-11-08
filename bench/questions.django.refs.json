@@ -1,0 +1,228 @@
+[
+ {
+  "q": "Which files (not tests) use the Python function or class `IsValid`, defined in django/contrib/gis/db/models/functions.py? List every one, repo-relative paths only, one per line.",
+  "expect": [
+   "django/contrib/gis/db/backends/base/operations.py",
+   "django/contrib/gis/db/backends/mysql/operations.py",
+   "django/contrib/gis/db/backends/oracle/operations.py"
+  ],
+  "defined": "django/contrib/gis/db/models/functions.py",
+  "verify": "IsValid"
+ },
+ {
+  "q": "Which files (not tests) use the Python function or class `Collector`, defined in django/db/models/deletion.py? List every one, repo-relative paths only, one per line.",
+  "expect": [
+   "django/contrib/admin/utils.py",
+   "django/contrib/contenttypes/management/commands/remove_stale_contenttypes.py",
+   "django/db/models/base.py",
+   "django/db/models/query.py"
+  ],
+  "defined": "django/db/models/deletion.py",
+  "verify": "Collector"
+ },
+ {
+  "q": "Which files (not tests) use the Python function or class `IsNull`, defined in django/db/models/lookups.py? List every one, repo-relative paths only, one per line.",
+  "expect": [
+   "django/db/models/constraints.py",
+   "django/db/models/fields/json.py",
+   "django/db/models/fields/related_lookups.py",
+   "django/db/models/fields/tuple_lookups.py"
+  ],
+  "defined": "django/db/models/lookups.py",
+  "verify": "IsNull"
+ },
+ {
+  "q": "Which files (not tests) use the Python function or class `get_token`, defined in django/middleware/csrf.py? List every one, repo-relative paths only, one per line.",
+  "expect": [
+   "django/template/backends/utils.py",
+   "django/template/context_processors.py",
+   "django/views/decorators/csrf.py"
+  ],
+  "defined": "django/middleware/csrf.py",
+  "verify": "get_token"
+ },
+ {
+  "q": "Which files (not tests) use the Python function or class `Choices`, defined in django/db/models/enums.py? List every one, repo-relative paths only, one per line.",
+  "expect": [
+   "django/apps/config.py",
+   "django/db/migrations/serializer.py",
+   "django/db/models/sql/compiler.py",
+   "django/db/models/sql/query.py",
+   "django/forms/forms.py",
+   "django/utils/choices.py",
+   "django/views/generic/dates.py"
+  ],
+  "defined": "django/db/models/enums.py",
+  "verify": "Choices"
+ },
+ {
+  "q": "Which files (not tests) use the Python function or class `HttpResponseNotFound`, defined in django/http/response.py? List every one, repo-relative paths only, one per line.",
+  "expect": [
+   "django/http/__init__.py",
+   "django/views/debug.py",
+   "django/views/defaults.py"
+  ],
+  "defined": "django/http/response.py",
+  "verify": "HttpResponseNotFound"
+ },
+ {
+  "q": "Which files (not tests) use the Python function or class `SET_NULL`, defined in django/db/models/deletion.py? List every one, repo-relative paths only, one per line.",
+  "expect": [
+   "django/contrib/admin/migrations/0001_initial.py",
+   "django/contrib/admin/models.py",
+   "django/db/models/__init__.py",
+   "django/db/models/fields/related.py"
+  ],
+  "defined": "django/db/models/deletion.py",
+  "verify": "SET_NULL"
+ },
+ {
+  "q": "Which files (not tests) use the Python function or class `mark_for_rollback_on_error`, defined in django/db/transaction.py? List every one, repo-relative paths only, one per line.",
+  "expect": [
+   "django/db/models/base.py",
+   "django/db/models/deletion.py",
+   "django/db/models/query.py"
+  ],
+  "defined": "django/db/transaction.py",
+  "verify": "mark_for_rollback_on_error"
+ },
+ {
+  "q": "Which files (not tests) use the Python function or class `SHA224`, defined in django/db/models/functions/text.py? List every one, repo-relative paths only, one per line.",
+  "expect": [
+   "django/db/backends/oracle/features.py",
+   "django/db/backends/sqlite3/_functions.py",
+   "django/db/models/functions/__init__.py"
+  ],
+  "defined": "django/db/models/functions/text.py",
+  "verify": "SHA224"
+ },
+ {
+  "q": "Which files (not tests) use the Python function or class `ConditionalGetMiddleware`, defined in django/middleware/http.py? List every one, repo-relative paths only, one per line.",
+  "expect": [
+   "django/contrib/sitemaps/views.py",
+   "django/contrib/syndication/views.py",
+   "django/views/decorators/http.py"
+  ],
+  "defined": "django/middleware/http.py",
+  "verify": "ConditionalGetMiddleware"
+ },
+ {
+  "q": "Which files (not tests) use the Python function or class `SQLCompiler`, defined in django/db/models/sql/compiler.py? List every one, repo-relative paths only, one per line.",
+  "expect": [
+   "django/db/backends/base/operations.py",
+   "django/db/backends/mysql/compiler.py",
+   "django/db/backends/postgresql/compiler.py",
+   "django/db/models/fields/generated.py",
+   "django/db/models/query.py",
+   "django/db/models/sql/datastructures.py",
+   "django/db/models/sql/query.py"
+  ],
+  "defined": "django/db/models/sql/compiler.py",
+  "verify": "SQLCompiler"
+ },
+ {
+  "q": "Which files (not tests) use the Python function or class `OrderBy`, defined in django/db/models/expressions.py? List every one, repo-relative paths only, one per line.",
+  "expect": [
+   "django/contrib/admin/checks.py",
+   "django/contrib/admin/views/main.py",
+   "django/contrib/postgres/apps.py",
+   "django/db/models/__init__.py",
+   "django/db/models/indexes.py",
+   "django/db/models/query.py",
+   "django/db/models/sql/compiler.py",
+   "django/db/models/sql/query.py"
+  ],
+  "defined": "django/db/models/expressions.py",
+  "verify": "OrderBy"
+ },
+ {
+  "q": "Which files (not tests) use the Python function or class `EmailInput`, defined in django/forms/widgets.py? List every one, repo-relative paths only, one per line.",
+  "expect": [
+   "django/contrib/admin/widgets.py",
+   "django/contrib/auth/forms.py",
+   "django/forms/fields.py"
+  ],
+  "defined": "django/forms/widgets.py",
+  "verify": "EmailInput"
+ },
+ {
+  "q": "Which files (not tests) use the Python function or class `ExpressionList`, defined in django/db/models/expressions.py? List every one, repo-relative paths only, one per line.",
+  "expect": [
+   "django/contrib/postgres/constraints.py",
+   "django/db/models/__init__.py",
+   "django/db/models/constraints.py",
+   "django/db/models/fields/json.py",
+   "django/db/models/indexes.py",
+   "django/db/models/lookups.py"
+  ],
+  "defined": "django/db/models/expressions.py",
+  "verify": "ExpressionList"
+ },
+ {
+  "q": "Which files (not tests) use the Python function or class `deserialize`, defined in django/core/serializers/__init__.py? List every one, repo-relative paths only, one per line.",
+  "expect": [
+   "django/contrib/gis/forms/fields.py",
+   "django/contrib/gis/forms/widgets.py",
+   "django/core/management/commands/loaddata.py",
+   "django/db/backends/base/creation.py"
+  ],
+  "defined": "django/core/serializers/__init__.py",
+  "verify": "deserialize"
+ },
+ {
+  "q": "Which files (not tests) use the Python function or class `Coalesce`, defined in django/db/models/functions/comparison.py? List every one, repo-relative paths only, one per line.",
+  "expect": [
+   "django/contrib/postgres/search.py",
+   "django/db/models/aggregates.py",
+   "django/db/models/base.py",
+   "django/db/models/constraints.py",
+   "django/db/models/functions/__init__.py",
+   "django/db/models/functions/text.py"
+  ],
+  "defined": "django/db/models/functions/comparison.py",
+  "verify": "Coalesce"
+ },
+ {
+  "q": "Which files (not tests) use the Python function or class `extract_views_from_urlpatterns`, defined in django/urls/utils.py? List every one, repo-relative paths only, one per line.",
+  "expect": [
+   "django/contrib/admindocs/utils.py",
+   "django/contrib/admindocs/views.py",
+   "django/core/management/commands/listurls.py"
+  ],
+  "defined": "django/urls/utils.py",
+  "verify": "extract_views_from_urlpatterns"
+ },
+ {
+  "q": "Which files (not tests) use the Python function or class `BaseEngine`, defined in django/template/backends/base.py? List every one, repo-relative paths only, one per line.",
+  "expect": [
+   "django/template/backends/django.py",
+   "django/template/backends/dummy.py",
+   "django/template/backends/jinja2.py"
+  ],
+  "defined": "django/template/backends/base.py",
+  "verify": "BaseEngine"
+ },
+ {
+  "q": "Which files (not tests) use the Python function or class `parse_header_parameters`, defined in django/utils/http.py? List every one, repo-relative paths only, one per line.",
+  "expect": [
+   "django/core/management/templates.py",
+   "django/http/multipartparser.py",
+   "django/http/request.py"
+  ],
+  "defined": "django/utils/http.py",
+  "verify": "parse_header_parameters"
+ },
+ {
+  "q": "Which files (not tests) use the Python function or class `qualname`, defined in django/utils/module_loading.py? List every one, repo-relative paths only, one per line.",
+  "expect": [
+   "django/core/mail/backends/base.py",
+   "django/db/migrations/serializer.py",
+   "django/tasks/backends/immediate.py",
+   "django/tasks/base.py",
+   "django/urls/resolvers.py",
+   "django/utils/deprecation.py"
+  ],
+  "defined": "django/utils/module_loading.py",
+  "verify": "qualname"
+ }
+]

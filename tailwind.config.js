@@ -15,8 +15,8 @@ export default {
       transitionTimingFunction: { lux: 'cubic-bezier(.22, 1, .36, 1)' },
       fontFamily: {
         mono: ['"JetBrains Mono"', '"IBM Plex Mono"', 'Consolas', 'monospace'],
-        serif: ['"Cormorant Garamond"', 'Georgia', 'serif'],
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        serif: ['Inter', '"Segoe UI"', 'system-ui', 'sans-serif'],
+        sans: ['Inter', '"Segoe UI"', 'system-ui', 'sans-serif'],
       },
       fontSize: {
         micro: ['11px', { lineHeight: '15px', letterSpacing: '0.01em' }],

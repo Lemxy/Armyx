@@ -1,0 +1,242 @@
+[
+ {
+  "q": "Which file defines the Python function documented as: \"Register a fresh hook that fires once the drawing pass completes.\"? Reply with the repo-relative path only.",
+  "expect": "django/template/response.py",
+  "verify": "add_post_render_callback",
+  "original": "Add a new post-rendering callback."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"An altered take on the docs-linter rule that flags overly long lines.\"? Reply with the repo-relative path only.",
+  "expect": "docs/lint.py",
+  "verify": "check_line_too_long_django",
+  "original": "A modified version of Sphinx-lint's line-too-long check."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Collapse each run of blank characters into one, and trim leading and trailing blanks.\"? Reply with the repo-relative path only.",
+  "expect": "django/contrib/postgres/search.py",
+  "verify": "normalize_spaces",
+  "original": "Convert multiple spaces to single and strip from both sides."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Give a yes-or-no answer on if the sequence earlier described the ceiling on PRs.\"? Reply with the repo-relative path only.",
+  "expect": "scripts/pr_limit/check_pr.py",
+  "verify": "comment_exists",
+  "original": "Return whether this workflow has already explained the PR limit."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Make dirs down a tree; each dir it adds gets perm bits, step by step.\"? Reply with the repo-relative path only.",
+  "expect": "django/utils/_os.py",
+  "verify": "safe_makedirs",
+  "original": "Create directories recursively with `mode` on each newly created level."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"A malformed target column name arrived through the URL parameters and reached the back-office panel.\"? Reply with the repo-relative path only.",
+  "expect": "django/contrib/admin/exceptions.py",
+  "verify": "DisallowedModelAdminToField",
+  "original": "Invalid to_field was passed to admin view via URL query string"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"A caller attempted to invoke a blocking-only method within an awaiting routine.\"? Reply with the repo-relative path only.",
+  "expect": "django/core/exceptions.py",
+  "verify": "SynchronousOnlyOperation",
+  "original": "The user tried to call a sync-only function from an async context."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Throw an exception when a given term is not valid as a filter condition in a query.\"? Reply with the repo-relative path only.",
+  "expect": "django/db/models/sql/query.py",
+  "verify": "check_filterable",
+  "original": "Raise an error if expression cannot be used in a WHERE clause."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Produce a collection of Attributes located by a route offset from the root schema.\"? Reply with the repo-relative path only.",
+  "expect": "django/contrib/admin/utils.py",
+  "verify": "get_fields_from_path",
+  "original": "Return list of Fields given path relative to model."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Insert a leading tag for verifying runtime-computed starting figures.\"? Reply with the repo-relative path only.",
+  "expect": "django/forms/forms.py",
+  "verify": "add_initial_prefix",
+  "original": "Add an 'initial' prefix for checking dynamic initial values."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Entries 1 through 5 of the to-do block must each be ticked off.\"? Reply with the repo-relative path only.",
+  "expect": "scripts/pr_quality/check_pr.py",
+  "verify": "check_checklist",
+  "original": "The first five items in the Checklist section must be checked."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Persist and hand back a previously stored record tied to the supplied form.\"? Reply with the repo-relative path only.",
+  "expect": "django/forms/models.py",
+  "verify": "save_existing",
+  "original": "Save and return an existing model instance for the given form."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Make option lists uniform across form inputs and UI controls.\"? Reply with the repo-relative path only.",
+  "expect": "django/utils/choices.py",
+  "verify": "normalize_choices",
+  "original": "Normalize choices values consistently for fields and widgets."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Give the tally of faults summed over every subform within the collection.\"? Reply with the repo-relative path only.",
+  "expect": "django/forms/formsets.py",
+  "verify": "total_error_count",
+  "original": "Return the number of errors across all forms in the formset."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Adds a lookup structure to a table in the database without blocking writes.\"? Reply with the repo-relative path only.",
+  "expect": "django/contrib/postgres/operations.py",
+  "verify": "AddIndexConcurrently",
+  "original": "Create an index using PostgreSQL's CREATE INDEX CONCURRENTLY syntax."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Wraps driver-dependent operations used to launch a command-line session.\"? Reply with the repo-relative path only.",
+  "expect": "django/db/backends/base/client.py",
+  "verify": "BaseDatabaseClient",
+  "original": "Encapsulate backend-specific methods for opening a client shell."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Fail any text with a NUL (U+0000) at any spot.\"? Reply with the repo-relative path only.",
+  "expect": "django/core/validators.py",
+  "verify": "ProhibitNullCharactersValidator",
+  "original": "Validate that the string doesn't contain the null character."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Erase a tracked copy on the upstream server plus its counterpart on this machine.\"? Reply with the repo-relative path only.",
+  "expect": "scripts/archive_eol_stable_branches.py",
+  "verify": "delete_remote_and_local_branch",
+  "original": "Delete a remote branch from origin and the maching local branch."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Drop the in-memory store of localized strings when a .mo catalog is altered.\"? Reply with the repo-relative path only.",
+  "expect": "django/utils/translation/reloader.py",
+  "verify": "translation_file_changed",
+  "original": "Clear the internal translations cache if a .mo file is modified."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Blueprint modeling a web-framework module plus its settings.\"? Reply with the repo-relative path only.",
+  "expect": "django/apps/config.py",
+  "verify": "AppConfig",
+  "original": "Class representing a Django application and its configuration."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Yield the most recent commit's serial number as digits.\"? Reply with the repo-relative path only.",
+  "expect": "django/utils/version.py",
+  "verify": "get_git_changeset",
+  "original": "Return a numeric identifier of the latest git changeset."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Convert text into a calendar day value.\"? Reply with the repo-relative path only.",
+  "expect": "django/utils/dateparse.py",
+  "verify": "parse_date",
+  "original": "Parse a string and return a datetime.date."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Accepts a dialable string and swaps each letter for its keypad digit.\"? Reply with the repo-relative path only.",
+  "expect": "django/template/defaultfilters.py",
+  "verify": "phone2numeric_filter",
+  "original": "Take a phone number and converts it in to its numerical equivalent."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Return how many secs remain before the login lapses.\"? Reply with the repo-relative path only.",
+  "expect": "django/contrib/sessions/backends/base.py",
+  "verify": "get_expiry_age",
+  "original": "Get the number of seconds until the session expires."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Tell whether the given item falls within a guarded category.\"? Reply with the repo-relative path only.",
+  "expect": "django/utils/encoding.py",
+  "verify": "is_protected_type",
+  "original": "Determine if the object instance is of a protected type."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Cut the given text down so it holds no more than the allowed count of symbols.\"? Reply with the repo-relative path only.",
+  "expect": "django/utils/text.py",
+  "verify": "trim_value",
+  "original": "Trim string `value` to `limit` characters."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Give back the GEOS release number as a triple of integers: primary, secondary, tertiary.\"? Reply with the repo-relative path only.",
+  "expect": "django/contrib/gis/geos/libgeos.py",
+  "verify": "geos_version_tuple",
+  "original": "Return the GEOS version as a tuple (major, minor, subminor)."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Yields True when the callable func can receive a named input name passed by label.\"? Reply with the repo-relative path only.",
+  "expect": "django/utils/inspect.py",
+  "verify": "func_supports_parameter",
+  "original": "Return True if function 'func' accepts a (keyword) argument 'name'."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Page for changing an existing entity, displaying the outcome through a view file.\"? Reply with the repo-relative path only.",
+  "expect": "django/views/generic/edit.py",
+  "verify": "UpdateView",
+  "original": "View for updating an object, with a response rendered by a template."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Convert a raw credential string into a one-way digest, ready to save in a table.\"? Reply with the repo-relative path only.",
+  "expect": "django/contrib/auth/hashers.py",
+  "verify": "make_password",
+  "original": "Turn a plaintext password into a hash for database storage."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Generate trimmed segments of an HTTP field's content, divided by a delimiter.\"? Reply with the repo-relative path only.",
+  "expect": "django/utils/http.py",
+  "verify": "split_header_value",
+  "original": "Yield stripped parts of an HTTP header value split by sep."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Convert an item into raw data using the destination text scheme.\"? Reply with the repo-relative path only.",
+  "expect": "django/http/response.py",
+  "verify": "make_bytes",
+  "original": "Turn a value into a bytestring encoded in the output charset."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Parent type for job-linked errors; never throw it on its own, only through derived kinds.\"? Reply with the repo-relative path only.",
+  "expect": "django/tasks/exceptions.py",
+  "verify": "TaskException",
+  "original": "Base class for task-related exceptions. Do not raise directly."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Read the ANSI styling string from the env key named after the web framework and build the terminal style map from it\"? Reply with the repo-relative path only.",
+  "expect": "django/utils/termcolors.py",
+  "verify": "parse_color_setting",
+  "original": "Parse a DJANGO_COLORS environment variable to produce the system palette"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Swap in a different value for the monitoring-only browser safety directive on one page.\"? Reply with the repo-relative path only.",
+  "expect": "django/views/decorators/csp.py",
+  "verify": "csp_report_only_override",
+  "original": "Override the Content-Security-Policy-Report-Only header for a view."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Minimal placeholder for an app settings object, exposing only a caption and a lookup table of engines.\"? Reply with the repo-relative path only.",
+  "expect": "django/db/migrations/state.py",
+  "verify": "AppConfigStub",
+  "original": "Stub of an AppConfig. Only provides a label and a dict of models."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Bundles every back-office setting and behavior tied to one specific entity type.\"? Reply with the repo-relative path only.",
+  "expect": "django/contrib/admin/options.py",
+  "verify": "ModelAdmin",
+  "original": "Encapsulate all admin options and functionality for a given model."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Build a diagnostic page for missing resources; `cause` is the not-found signal.\"? Reply with the repo-relative path only.",
+  "expect": "django/views/debug.py",
+  "verify": "technical_404_response",
+  "original": "Create a technical 404 error response. `exception` is the Http404."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Raises a failure when the locale preferences clash with one another.\"? Reply with the repo-relative path only.",
+  "expect": "django/core/checks/translation.py",
+  "verify": "check_language_settings_consistent",
+  "original": "Error if language settings are not consistent with each other."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"A step recorded as executed while certain prerequisite steps remain pending.\"? Reply with the repo-relative path only.",
+  "expect": "django/db/migrations/exceptions.py",
+  "verify": "InconsistentMigrationHistory",
+  "original": "An applied migration has some of its dependencies not applied."
+ }
+]

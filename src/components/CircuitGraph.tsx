@@ -7,7 +7,7 @@ import { layout, type Edge, type P } from '../layout'
 
 const W = 232, H = 118, R = 14
 const PALETTE = ['--m1', '--m2', '--m3', '--m4', '--m5', '--m6', '--m7']
-const NAMES = { en: ['Gold', 'Rose', 'Sage', 'Azure', 'Amethyst', 'Copper', 'Teal'], ru: ['Золото', 'Роза', 'Шалфей', 'Лазурь', 'Аметист', 'Медь', 'Бирюза'] }
+const NAMES = { en: ['Accent', 'Rose', 'Sage', 'Azure', 'Amethyst', 'Copper', 'Teal'], ru: ['Акцент', 'Роза', 'Шалфей', 'Лазурь', 'Аметист', 'Медь', 'Бирюза'] }
 const AUTO = PALETTE.slice(1) // gold already means current / selected
 type View = { x: number; y: number; k: number }
 type Drag = { kind: 'pan' | 'node'; name?: string; sx: number; sy: number; origin: Record<string, P>; ov: View; moved: boolean; ctrl: boolean }
@@ -15,7 +15,8 @@ type Drag = { kind: 'pan' | 'node'; name?: string; sx: number; sy: number; origi
 const clip = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + '…' : s)
 const css = (v: string) => `var(${v})`
 /** Cubic link from the source's out-port (right) to the target's in-port (left). */
-const curve = (x1: number, y1: number, x2: number, y2: number) => {
+const curve = (x1: number, y1: number, x2: number, y2: number, tree = false) => {
+  if (tree) { const c = Math.max(50, Math.abs(y2 - y1) / 2); return `M${x1} ${y1} C${x1} ${y1 + c}, ${x2} ${y2 - c}, ${x2} ${y2}` }
   const c = Math.max(70, Math.abs(x2 - x1) / 2)
   return `M${x1} ${y1} C${x1 + c} ${y1}, ${x2 - c} ${y2}, ${x2} ${y2}`
 }
@@ -43,7 +44,8 @@ export default function CircuitGraph({ notes, current, project, onOpen, onNew, o
   const names = useMemo(() => new Set(notes.map((n) => n.name)), [notes])
   const allTags = useMemo(() => [...new Set(notes.flatMap((n) => tags(n.content)))].sort(), [notes])
   const edges = useMemo(() => notes.flatMap((n) => links(n.content).filter((t) => names.has(t) && t !== n.name).map((to) => ({ from: n.name, to }))), [notes, names])
-  const auto = useMemo(() => layout(notes.map((n) => n.name), edges), [notes, edges])
+  const [tree, setTree] = useState(() => { try { return localStorage.getItem('desovault.tree') === '1' } catch { return false } })
+  const auto = useMemo(() => layout(notes.map((n) => n.name), edges, tree), [notes, edges, tree])
   const target = (n: string): P => pos[n] ?? auto[n] ?? { x: 0, y: 0 }
   const deg = useMemo(() => {
     const m = new Map<string, { i: number; o: number }>([...names].map((n) => [n, { i: 0, o: 0 }]))
@@ -80,7 +82,7 @@ export default function CircuitGraph({ notes, current, project, onOpen, onNew, o
     if (moving) raf.current = requestAnimationFrame(tick)
   }
   const kick = () => { if (!raf.current) raf.current = requestAnimationFrame(tick) }
-  useEffect(() => () => cancelAnimationFrame(raf.current), [])
+  useEffect(() => () => { cancelAnimationFrame(raf.current); raf.current = 0 }, []) // reset, or StrictMode's remount leaves kick() dead
   const shown = notes.filter((n) => !hidden.has(n.name))
   // new targets after every render (layout, hide/show, drag); new notes appear in place, existing ones glide
   useEffect(() => {
@@ -135,7 +137,7 @@ export default function CircuitGraph({ notes, current, project, onOpen, onNew, o
     const h = (e: WheelEvent) => {
       e.preventDefault()
       const r = el.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top, v = viewT.current
-      const k = Math.min(2.5, Math.max(0.2, v.k * Math.exp(-e.deltaY * 0.0015)))
+      const k = Math.min(2.5, Math.max(0.2, v.k * Math.exp(-Math.sign(e.deltaY) * Math.min(Math.abs(e.deltaY), 120) * 0.002)))
       viewT.current = { k, x: mx - ((mx - v.x) / v.k) * k, y: my - ((my - v.y) / v.k) * k }
       kick()
     }
@@ -145,6 +147,12 @@ export default function CircuitGraph({ notes, current, project, onOpen, onNew, o
     return () => { el.removeEventListener('wheel', h); window.removeEventListener('keydown', esc) }
   }, [])
 
+  const toggleTree = () => {
+    const v = !tree
+    try { localStorage.setItem('desovault.tree', v ? '1' : '0') } catch { /* private mode */ }
+    setTree(v); setPos({})
+    setTimeout(() => fit(), 50) // after the new layout is rendered
+  }
   const reset = () => { setPos({}); setPinned(''); requestAnimationFrame(() => fit()) }
   const hideOnly = (keep: Set<string>) => { setHidden(new Set(notes.map((n) => n.name).filter((n) => !keep.has(n)))); requestAnimationFrame(() => fit([...keep])) }
   const hide = (s: Set<string>) => { setHidden((h) => new Set([...h, ...s])); setSel((x) => new Set([...x].filter((n) => !s.has(n)))) }
@@ -232,7 +240,7 @@ export default function CircuitGraph({ notes, current, project, onOpen, onNew, o
 
   return (
     <div className="relative w-full h-full bg-bg overflow-hidden">
-      <svg ref={svg} className="w-full h-full cursor-grab active:cursor-grabbing select-none" onPointerDown={(e) => down(e)} onPointerMove={move} onPointerUp={up}
+      <svg ref={svg} className={`${shown.length > 60 ? 'fast ' : ''}w-full h-full cursor-grab active:cursor-grabbing select-none`} onPointerDown={(e) => down(e)} onPointerMove={move} onPointerUp={up}
         onContextMenu={canvasMenu}>
         <defs>
           <pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse" patternTransform={`translate(${view.x} ${view.y}) scale(${view.k})`}>
@@ -240,11 +248,12 @@ export default function CircuitGraph({ notes, current, project, onOpen, onNew, o
           </pattern>
         </defs>
         <rect width="100%" height="100%" fill="url(#grid)" />
-        <g transform={`translate(${view.x} ${view.y}) scale(${view.k})`} fontFamily="Inter, system-ui, sans-serif">
+        <g transform={`translate(${view.x} ${view.y}) scale(${view.k})`} fontFamily="Inter, 'Segoe UI', system-ui, sans-serif">
           {ordered.map((e) => {
             const a = at(e.from), b = at(e.to)
-            const x1 = a.x + W, y1 = a.y + H / 2, x2 = b.x - 9, y2 = b.y + H / 2
-            const d = curve(x1, y1, x2, y2)
+            const x1 = tree ? a.x + W / 2 : a.x + W, y1 = tree ? a.y + H : a.y + H / 2
+            const x2 = tree ? b.x + W / 2 : b.x - 9, y2 = tree ? b.y - 9 : b.y + H / 2
+            const d = curve(x1, y1, x2, y2, tree)
             const nb = other(e)
             const color = nb ? css(hue.get(nb)!) : marks[e.from] ? css(marks[e.from]) : 'var(--line2)'
             const dim = filtering ? !(hit.has(e.from) && hit.has(e.to)) : !!focus && !nb
@@ -253,7 +262,7 @@ export default function CircuitGraph({ notes, current, project, onOpen, onNew, o
                 <title>{`${e.from} → ${e.to}`}</title>
                 <path d={d} fill="none" stroke={color} strokeWidth={nb ? 2 : 1.3} strokeLinecap="round" />
                 {nb && <path d={d} fill="none" stroke="var(--bg)" strokeOpacity=".55" strokeWidth="2" strokeDasharray="3 21" className="pulse" />}
-                <path d={`M${x2 - 1} ${y2 - 5} L${x2 + 8} ${y2} L${x2 - 1} ${y2 + 5} Z`} fill={color} stroke={color} strokeWidth="1.5" strokeLinejoin="round" />
+                <path d={tree ? `M${x2 - 5} ${y2 - 1} L${x2} ${y2 + 8} L${x2 + 5} ${y2 - 1} Z` : `M${x2 - 1} ${y2 - 5} L${x2 + 8} ${y2} L${x2 - 1} ${y2 + 5} Z`} fill={color} stroke={color} strokeWidth="1.5" strokeLinejoin="round" />
               </g>
             )
           })}
@@ -272,19 +281,19 @@ export default function CircuitGraph({ notes, current, project, onOpen, onNew, o
               <g key={n.name} transform={`translate(${p.x} ${p.y})`} className="g-node cursor-pointer" style={{ opacity: dim ? 0.18 : 1 }}
                 onPointerDown={(e) => down(e, n.name)} onContextMenu={(e) => nodeMenu(e, n.name)}
                 onPointerEnter={() => setHover(n.name)} onPointerLeave={() => setHover('')}>
-                <g className="node-in" style={n.name === hover ? { filter: 'drop-shadow(0 14px 28px rgba(0,0,0,.45))' } : undefined}>
+                <g className="node-in">
                   <rect className="card" width={W} height={H} rx={R} fill={picked ? 'var(--panel)' : 'var(--surface)'} stroke={stroke} strokeWidth={gold || hue.has(n.name) ? 1.5 : 1} />
                   {ring && <circle cx="20" cy="24" r="4.5" fill={css(ring)} />}
-                  <text x={ring ? 32 : 18} y="30" fontSize="18" fontWeight="600" fill="var(--fg)" fontFamily="'Cormorant Garamond', Georgia, serif">{clip(title(n), ring ? 21 : 23)}</text>
+                  <text x={ring ? 32 : 18} y="30" fontSize="15" fontWeight="600" fill="var(--fg)">{clip(title(n), ring ? 24 : 27)}</text>
                   {picked && <circle cx={W - 20} cy="24" r="4" fill="none" stroke="var(--accent)" strokeWidth="1.5" />}
                   {picked && <circle cx={W - 20} cy="24" r="1.6" fill="var(--accent)" />}
-                  {body.map((l, j) => <text key={j} x="18" y={56 + j * 16} fontSize="11" fill="var(--mut)">{clip(l, 34)}</text>)}
-                  {nt.slice(0, 2).map((t, j) => <text key={t} x={18 + j * 66} y={H - 16} fontSize="10" fill="var(--dim)">{clip('#' + t, 10)}</text>)}
-                  <text x={W - 16} y={H - 16} fontSize="10" textAnchor="end" fill="var(--dim)">
-                    <tspan>← {i}</tspan><tspan dx="10" fill={o ? 'var(--accent)' : 'var(--dim)'}>{o} →</tspan>
+                  {body.map((l, j) => <text key={j} x="18" y={56 + j * 16} fontSize="12" fill="var(--mut)">{clip(l, 32)}</text>)}
+                  {nt.slice(0, 2).map((t, j) => <text key={t} x={18 + j * 66} y={H - 16} fontSize="11" fill="var(--mut)">{clip('#' + t, 9)}</text>)}
+                  <text x={W - 16} y={H - 16} fontSize="12" fontWeight="500" textAnchor="end" fill="var(--mut)" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                    <tspan>← {i}</tspan><tspan dx="10" fill={o ? 'var(--accent)' : 'var(--mut)'}>{o} →</tspan>
                   </text>
-                  <circle cx="0" cy={H / 2} r="4.5" fill="var(--bg)" stroke={i ? 'var(--mut)' : 'var(--line2)'} strokeWidth="1.3" />
-                  <circle cx={W} cy={H / 2} r="4.5" fill={o ? 'var(--accent)' : 'var(--line2)'} />
+                  <circle cx={tree ? W / 2 : 0} cy={tree ? 0 : H / 2} r="4.5" fill="var(--bg)" stroke={i ? 'var(--mut)' : 'var(--line2)'} strokeWidth="1.3" />
+                  <circle cx={tree ? W / 2 : W} cy={tree ? H : H / 2} r="4.5" fill={o ? 'var(--accent)' : 'var(--line2)'} />
                 </g>
               </g>
             )
@@ -292,14 +301,14 @@ export default function CircuitGraph({ notes, current, project, onOpen, onNew, o
         </g>
       </svg>
 
-      <div className="anim-rise absolute top-4 left-1/2 -translate-x-1/2 w-[34rem] max-w-[90%] flex items-center gap-3 pl-4 pr-3 py-2 rounded-full bg-surface/95 border border-line shadow-float focus-within:border-accent">
+      <div className="anim-rise absolute top-4 inset-x-0 mx-auto w-[34rem] max-w-[90%] flex items-center gap-3 pl-4 pr-3 py-2 rounded-full bg-surface/95 border border-line shadow-float focus-within:border-accent">
         <Search size={14} className="text-dim shrink-0" />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={tr('graphSearch')}
           className="flex-1 min-w-0 bg-transparent outline-none text-sm placeholder:text-dim" />
         {filtering && <span className="anim-fade text-micro text-dim tabular-nums">{hit.size}/{notes.length}</span>}
       </div>
       {allTags.length > 0 && (
-        <div className="anim-rise absolute top-[4.25rem] left-1/2 -translate-x-1/2 max-w-[80%] flex flex-wrap justify-center gap-1.5" style={{ animationDelay: '80ms' }}>
+        <div className="anim-rise absolute top-[4.25rem] inset-x-0 mx-auto w-fit max-w-[80%] flex flex-wrap justify-center gap-1.5" style={{ animationDelay: '80ms' }}>
           {allTags.map((t) => (
             <button key={t} onClick={() => setTag(tag === t ? '' : t)}
               className={`btn-press px-2.5 py-0.5 rounded-full text-micro border bg-surface ${tag === t ? 'border-accent text-accent' : 'border-line text-dim hover:text-mut hover:border-line2'}`}>#{t}</button>
@@ -309,8 +318,8 @@ export default function CircuitGraph({ notes, current, project, onOpen, onNew, o
 
       <div className="anim-rise absolute bottom-4 right-4 w-72 rounded-2xl border border-line bg-surface/95 shadow-float text-micro" style={{ animationDelay: '120ms' }}>
         <div className="flex items-baseline justify-between px-4 pt-3.5">
-          <span className="font-serif text-lg font-semibold">{tr('graph')}</span>
-          <span className="text-dim tabular-nums">{shown.length} · {shownEdges.length}</span>
+          <span className="text-base font-semibold">{tr('graph')}</span>
+          <span className="text-mut tabular-nums">{shown.length} · {shownEdges.length}</span>
         </div>
         <p className="px-4 pt-1.5 text-dim leading-relaxed">{tr('legendHint')}</p>
         <div className="px-4 pt-2.5 flex items-center gap-1.5">
@@ -334,6 +343,8 @@ export default function CircuitGraph({ notes, current, project, onOpen, onNew, o
           {sel.size > 0 && <button onClick={() => setSel(new Set())} className="anim-fade text-accent hover:text-fg">{sel.size} {tr('selected')} ×</button>}
           {hidden.size > 0 && <button onClick={() => { setHidden(new Set()); requestAnimationFrame(() => fit(notes.map((n) => n.name))) }} title={tr('showAll', { n: hidden.size })}
             className="anim-fade flex items-center gap-1 hover:text-accent"><Eye size={12} />{hidden.size}</button>}
+          <button onClick={toggleTree} title="Family Tree / Circuit"
+            className={`btn-press px-2 py-1 rounded-lg border ${tree ? 'border-accent text-accent' : 'border-line text-mut hover:text-accent'}`}>{tree ? 'Family Tree' : 'Circuit'}</button>
           <button onClick={() => fit()} title={tr('fitView')}
             className="btn-press ml-auto p-1.5 rounded-lg text-mut hover:text-accent hover:bg-panel"><Maximize2 size={13} /></button>
         </div>

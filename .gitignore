@@ -12,3 +12,4 @@ bench/questions.novafull*.json
 bench/edit-tasks.novafull*.json
 
 .claude/settings.local.json
+.tools/

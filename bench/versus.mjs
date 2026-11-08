@@ -1,22 +1,26 @@
 // Plain Claude Code vs Claude Code through Armyx, on the same "which file does X" questions. Real `claude -p` runs, numbers from the API usage report.
-//   plain   your Claude Code as is (claude.ai connectors on, no plugin)
+//   plain   your Claude Code as is (claude.ai connectors on, no hooks)
 //   nomcp   the claude.ai connectors switched off (ENABLE_CLAUDEAI_MCP_SERVERS=false), nothing else
-//   armyx   nomcp + the armyx plugin (map and best matches by hook; graph read from ARMYX_GRAPH)
+//   armyx   nomcp + the Armyx hooks from mcp/setup.mjs (map and best matches; graph read from the graph dir)
 // All arms get Read, Grep and Glob. The first call per arm only warms the prompt cache and is reported separately.
 //   node --experimental-strip-types --no-warnings bench/versus.mjs <project> <graph dir> <questions.json> [model] [out.json]   Env: REPS=1
 import { spawn } from 'node:child_process'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 
 const [project, graph, qfile, model = 'claude-haiku-5-5', outFile = 'bench/results.versus.json'] = process.argv.slice(2)
 const questions = JSON.parse(readFileSync(qfile, 'utf8'))
 const reps = Number(process.env.REPS ?? 1)
-const plugin = fileURLToPath(new URL('../plugin/armyx', import.meta.url)).replaceAll('\\', '/')
+// the same settings mcp/setup.mjs writes into a project, passed with --settings so the project stays untouched
+const { configure } = await import('../mcp/setup.mjs')
+const settings = `${mkdtempSync(`${tmpdir()}/armyx-versus-`)}/settings.json`
+writeFileSync(settings, JSON.stringify(configure({}, { graph: graph.replaceAll('\\', '/'), keepConnectors: true })))
 
 const arms = {
   plain: { env: {}, args: [] },
   nomcp: { env: { ENABLE_CLAUDEAI_MCP_SERVERS: 'false' }, args: [] },
-  armyx: { env: { ENABLE_CLAUDEAI_MCP_SERVERS: 'false', ARMYX_GRAPH: graph }, args: ['--plugin-dir', plugin] },
+  armyx: { env: { ENABLE_CLAUDEAI_MCP_SERVERS: 'false' }, args: ['--settings', settings] },
 }
 const active = Object.keys(arms).filter((a) => !process.env.ARMS || process.env.ARMS.split(',').includes(a))
 

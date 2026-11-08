@@ -2,30 +2,40 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Onyx & champagne gold. Flat colour, soft radii, depth from shadow — no gradients. */
+/* Taurium themes. Default = dull steel; `dark` = midnight violet; `light` = white + sky blue. Flat colour, soft radii, depth from shadow. */
 :root {
-  --bg: #0B0A09; --surface: #12110F; --panel: #1A1815; --field: #0F0E0C;
-  --line: #24211C; --line2: #353026;
-  --fg: #F2ECDF; --mut: #A39A89; --dim: #645D51;
-  --accent: #D4B26A; --accent-dim: rgba(212, 178, 106, 0.12);
-  --edge-in: #E6DECD;
-  --status-ok: #93B08F; --status-err: #CF7A6E;
-  --grid-line: rgba(212, 178, 106, 0.07);
-  --shadow: 0 24px 64px -24px rgba(0, 0, 0, 0.75), 0 2px 8px -2px rgba(0, 0, 0, 0.4);
-  /* note marks / neighbour colours: jewel tones that sit next to gold */
-  --m1: #D4B26A; --m2: #D08F8A; --m3: #8DBB9C; --m4: #84ABD1; --m5: #B49AD6; --m6: #D69E73; --m7: #6FC0BD;
+  --bg: #14171A; --surface: #1A1E22; --panel: #21262B; --field: #121518;
+  --line: #2C3238; --line2: #3D454D;
+  --fg: #DDE3E8; --mut: #98A3AD; --dim: #626C76;
+  --accent: #8FA3B5; --accent-dim: rgba(143, 163, 181, 0.14);
+  --edge-in: #C3CCD4;
+  --status-ok: #8DAA98; --status-err: #C47F78;
+  --grid-line: rgba(143, 163, 181, 0.07);
+  --shadow: 0 24px 64px -24px rgba(0, 0, 0, 0.7), 0 2px 8px -2px rgba(0, 0, 0, 0.4);
+  --m1: #8FA3B5; --m2: #C98C88; --m3: #8DBB9C; --m4: #7FA8D6; --m5: #AE9AD6; --m6: #D0A072; --m7: #6FBDBA;
   color-scheme: dark;
 }
+[data-theme='dark'] {
+  --bg: #07080D; --surface: #0C0E15; --panel: #131724; --field: #090B11;
+  --line: #1B2030; --line2: #2B3248;
+  --fg: #E8EAF6; --mut: #8F96B2; --dim: #565D7A;
+  --accent: #9B8CFF; --accent-dim: rgba(155, 140, 255, 0.13);
+  --edge-in: #D4D8F0;
+  --status-ok: #7FC8A0; --status-err: #E0788A;
+  --grid-line: rgba(155, 140, 255, 0.07);
+  --shadow: 0 24px 64px -24px rgba(0, 0, 0, 0.85), 0 2px 8px -2px rgba(0, 0, 0, 0.5);
+  --m1: #9B8CFF; --m2: #E58BA0; --m3: #7FD0A8; --m4: #6FB4F0; --m5: #D08CF0; --m6: #F0A870; --m7: #5CD0CC;
+}
 [data-theme='light'] {
-  --bg: #F7F3EB; --surface: #FFFDF8; --panel: #F1EBDF; --field: #FBF8F2;
-  --line: #E7DFD0; --line2: #D3C8B3;
-  --fg: #17150F; --mut: #5E5646; --dim: #9A907D;
-  --accent: #9A7429; --accent-dim: rgba(154, 116, 41, 0.1);
-  --edge-in: #3A352B;
-  --status-ok: #4E7745; --status-err: #A3463B;
-  --grid-line: rgba(154, 116, 41, 0.12);
-  --shadow: 0 24px 64px -28px rgba(60, 45, 20, 0.3), 0 2px 8px -2px rgba(60, 45, 20, 0.08);
-  --m1: #9A7429; --m2: #B0544D; --m3: #3F8A5A; --m4: #3D6E9E; --m5: #7A57A8; --m6: #B0662E; --m7: #2F8A86;
+  --bg: #F3F8FE; --surface: #FFFFFF; --panel: #E9F1FB; --field: #F8FBFF;
+  --line: #D8E5F4; --line2: #B6CBE3;
+  --fg: #0F1B2D; --mut: #4A5E78; --dim: #8A9BB2;
+  --accent: #2F6FDB; --accent-dim: rgba(47, 111, 219, 0.1);
+  --edge-in: #26364D;
+  --status-ok: #2E7D5B; --status-err: #C0463B;
+  --grid-line: rgba(47, 111, 219, 0.1);
+  --shadow: 0 24px 64px -28px rgba(30, 70, 130, 0.28), 0 2px 8px -2px rgba(30, 70, 130, 0.08);
+  --m1: #2F6FDB; --m2: #C0506A; --m3: #2E8A5E; --m4: #1F8FB8; --m5: #7A57C8; --m6: #C0702E; --m7: #1F8A86;
   color-scheme: light;
 }
 
@@ -36,6 +46,9 @@ body { @apply bg-bg text-fg font-sans antialiased; font-feature-settings: 'cv11'
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-thumb { background: var(--line2); border-radius: 99px; }
 :focus-visible { outline: 1.5px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+/* native dropdown lists follow the theme instead of the OS default */
+select option, select optgroup { background: var(--panel); color: var(--fg); }
+
 input:focus-visible, textarea:focus-visible, select:focus-visible { outline: none; }
 kbd { @apply font-sans text-[10.5px] text-dim border border-line rounded-md px-1.5 py-px; }
 
@@ -53,6 +66,14 @@ button, input, textarea, select, li, a, aside, [data-ease] {
 @keyframes menu { from { opacity: 0; transform: scale(.94) } }
 @keyframes node-in { from { opacity: 0; transform: scale(.92) } }
 @keyframes flow { to { stroke-dashoffset: -24 } }
+@keyframes slide-in { from { opacity: 0; transform: translateX(28px) } }
+@keyframes fade-out { to { opacity: 0 } }
+@keyframes pop-out { to { opacity: 0; transform: translateY(6px) scale(.975) } }
+.anim-slide { animation: slide-in .5s var(--ease) both; }
+.anim-fade-out { animation: fade-out .18s var(--ease) forwards; }
+.anim-pop-out { animation: pop-out .18s var(--ease) forwards; }
+html { scroll-behavior: smooth; }
+button:not(:disabled):active { transform: scale(.97); }
 .anim-fade { animation: fade .35s var(--ease) both; }
 .anim-rise { animation: rise .5s var(--ease) both; }
 .anim-pop { animation: pop .42s var(--ease) both; }
@@ -66,5 +87,9 @@ button, input, textarea, select, li, a, aside, [data-ease] {
 .g-edge { transition: opacity .4s var(--ease); }
 .g-edge path { transition: stroke .35s var(--ease), stroke-width .35s var(--ease), fill .35s var(--ease); }
 
-html[data-motion='off'] *, html[data-motion='off'] *::before { transition: none !important; animation: none !important; }
+/* big graphs: hovering re-dims every card and link, so skip those transitions and the pulse to keep it smooth */
+.fast .g-node, .fast .g-edge, .fast .g-edge path, .fast .g-node .card { transition: none; }
+.fast .pulse { animation: none; }
+
+html[data-motion='off'] *,html[data-motion='off'] *::before { transition: none !important; animation: none !important; }
 @media (prefers-reduced-motion: reduce) { *, *::before { transition: none !important; animation: none !important; } }

@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "DesoVault",
+  "productName": "Taurium",
   "version": "0.1.0",
   "identifier": "dev.deso.vault",
   "build": {
@@ -10,8 +10,8 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "windows": [{ "title": "DesoVault", "width": 1400, "height": 900 }],
-    "security": { "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost https://api.anthropic.com https://generativelanguage.googleapis.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:" }
+    "windows": [{ "title": "Taurium", "width": 1400, "height": 900 }],
+    "security": { "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost https://api.anthropic.com https://generativelanguage.googleapis.com https://api.deepseek.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:" }
   },
   "bundle": { "active": false }
 }

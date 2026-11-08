@@ -1,0 +1,12 @@
+[
+  { "q": "Which file converts NanoMark notes to Markdown with per-construct token tallies? Reply with the repo-relative path only.", "expect": "src/deso.ts", "verify": "toMarkdown" },
+  { "q": "Which Rust file scans a code folder into graph notes? Reply with the repo-relative path only.", "expect": "src-tauri/src/scan.rs", "verify": "scan" },
+  { "q": "Which component draws the link graph? Reply with the repo-relative path only.", "expect": "src/components/CircuitGraph.tsx", "verify": "Graph" },
+  { "q": "Which component is the sidebar chat with the AI agent? Reply with the repo-relative path only.", "expect": "src/components/AgentSidebar.tsx", "verify": "Agent" },
+  { "q": "Which file holds the text of the first welcome note of a new project? Reply with the repo-relative path only.", "expect": "src/welcome.ts", "verify": "welcome" },
+  { "q": "Which file calls the DeepSeek API? Reply with the repo-relative path only.", "expect": "src/deepseek.ts", "verify": "deepseek" },
+  { "q": "Which component is the canvas where models are connected into an orchestra? Reply with the repo-relative path only.", "expect": "src/components/Orchestra.tsx", "verify": "Orchestra" },
+  { "q": "Which file computes the positions of graph nodes? Reply with the repo-relative path only.", "expect": "src/layout.ts", "verify": "layout" },
+  { "q": "Which component is the settings modal? Reply with the repo-relative path only.", "expect": "src/components/SettingsModal.tsx", "verify": "Settings" },
+  { "q": "Which file stores the API keys the user enters? Reply with the repo-relative path only.", "expect": "src/keys.ts", "verify": "key" }
+]

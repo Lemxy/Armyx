@@ -50,6 +50,7 @@ describe('setup', () => {
     const s = configure({}, opts)
     expect(s.env.ENABLE_CLAUDEAI_MCP_SERVERS).toBe('false')
     expect(s.hooks.SessionStart[0].matcher).toBeUndefined()
+    expect(s.hooks.SubagentStart[0].hooks[0].command).toContain('"/g" subagent')
     expect(s.hooks.UserPromptSubmit[0].hooks[0].command).toContain('"/g" prompt "/t"')
   })
   it('is idempotent and keeps what was there', () => {
