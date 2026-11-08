@@ -1,0 +1,7 @@
+{
+  "name": "armyx",
+  "owner": { "name": "armyx" },
+  "plugins": [
+    { "name": "armyx", "source": "./armyx", "description": "Project map for the agent and its subagents, skill hints per prompt, connector off switch." }
+  ]
+}

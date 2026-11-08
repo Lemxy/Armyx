@@ -66,3 +66,9 @@ Held-out: -36% cost, -29% turns. Impact: -10% cost, recall already 1.00 for both
 - Call-graph second pass over an AST (graphify's `INFERRED calls`): needs a parser per language, bigger than this change.
 - A real graphify run: its install executes a third-party package from the internet; not run here.
 - Gateway and skill hints on other models or on more than 14 prompts.
+
+## Plugin armyx (`plugin/armyx/`) and live checks (summary; details in RESULTS-v5.ru.md)
+
+Built by `npm run plugin`. With the plugin the main session sees the map and so does a subagent (`SubagentStart`); without it, no map. `/armyx:armyx status|on|off` and `/armyx:armyx-debt` work (1 turn, ~$0.003). Skills hint after the prompt filter: 12/14, ~6,360 tokens per call. `MAP_INTRO` 142 -> 102 tokens.
+
+Small project (Armyx, 78 notes, 10 q x 2, haiku): alone $0.0228 (52 turns) vs hook-delivered map $0.0302 (30 turns) vs map in the system prompt ~$0.0011 per question. A plugin can only use hooks, so on a small project its map costs more in dollars (fewer turns and seconds). Not measured: a smaller map budget for the hook.

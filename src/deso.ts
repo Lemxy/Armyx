@@ -61,9 +61,9 @@ const prop = (src: string, k: string) => src.match(new RegExp(String.raw`^\?${k}
 
 /** How the agent should read `graphMap` (kept next to it so the two never drift apart). */
 export const MAP_INTRO =
-  'Below is the map of the whole project graph, one line per note: `id path — about [exports] -> ids of linked notes`; ' +
-  'less important notes are shortened to `id path — about`. A `~` before a file in `uses` / `used by` marks a link guessed by symbol name (not an import line). A block "Best matches" may follow with the files closest to the question. Use it to know what exists and where to look. ' +
-  'If the map does not clearly name the answer, search the project (Grep/Glob) or open the file; never guess a path.'
+  'Project map, one line per file: `id path — about [exports] -> linked ids` (less important files: `id path — about`). ' +
+  '`~` before a file in uses / used by = link guessed by symbol name, not an import. "Best matches" may follow with the closest files. ' +
+  'If the map does not name the answer, search (Grep/Glob) or open the file; never guess a path.'
 
 const MAP_BUDGET = 8000 // tokens, resent on every turn: half for full lines, half for shortened ones
 
