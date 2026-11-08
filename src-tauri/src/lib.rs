@@ -1,4 +1,5 @@
 pub mod scan;
+mod worktree;
 
 use serde::Serialize;
 use std::{fs, io::Write, path::PathBuf, process::Stdio};
@@ -102,32 +103,94 @@ fn delete_note(name: String) -> Result<(), String> {
     fs::remove_file(data_dir().join(format!("{name}.deso"))).map_err(|e| e.to_string())
 }
 
-/// Scan the project folder and write its graph as notes in one batch. Returns how many notes were written.
+const GENERATED: &str = "?generated: scan";
+
+/// Brings the generated notes in `dir` in line with a fresh scan, touching only what changed (a reader such as the hook never sees a
+/// half-rewritten graph): new and changed notes are written, notes of deleted files are removed, hand-written notes are never touched.
+/// Returns how many files changed.
+fn write_graph(dir: &std::path::Path, found: &[(String, String)]) -> Result<usize, String> {
+    fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let mut old: std::collections::HashMap<String, String> = fs::read_dir(dir).map_err(|e| e.to_string())?.flatten()
+        .filter_map(|e| { let p = e.path(); let n = p.file_stem()?.to_str()?.to_string(); (p.extension()? == "deso").then(|| fs::read_to_string(&p).ok().map(|c| (n, c)))? }).collect();
+    let mut changed = 0;
+    for (name, content) in found {
+        valid(name)?;
+        match old.remove(name) {
+            Some(prev) if !prev.contains(GENERATED) || prev == *content => continue, // hand-written, or unchanged
+            _ => { fs::write(dir.join(format!("{name}.deso")), content).map_err(|e| e.to_string())?; changed += 1 }
+        }
+    }
+    for (name, prev) in old.iter().filter(|(_, c)| c.contains(GENERATED)) { // what is left was not found again: its file is gone
+        let _ = prev; fs::remove_file(dir.join(format!("{name}.deso"))).map_err(|e| e.to_string())?; changed += 1;
+    }
+    Ok(changed)
+}
+
+fn graph_dir() -> PathBuf {
+    let r = root();
+    if has_deso(&r) { r.clone() } else { r.join(HIDDEN) }
+}
+
+/// Scan the project folder and write its graph as notes in one batch. Returns how many notes the scan found.
 /// `force` re-generates: it replaces previously generated notes (`?generated: scan`) and keeps hand-written ones.
 /// Without `force` it does nothing when notes already exist.
 #[tauri::command]
 async fn index_project(force: bool) -> Result<usize, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let r = root();
         if !force && !notes()?.is_empty() { return Ok(0) }
-        let found = scan::scan(&r);
+        let found = scan::scan_cached(&root(), force); // the button (force) forgets what the watcher learned; the first open fills it
         if found.is_empty() { return Ok(0) }
-        let dir = if has_deso(&r) { r.clone() } else { r.join(HIDDEN) };
-        fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        if force {
-            for n in notes()?.iter().filter(|n| n.content.contains("?generated: scan")) {
-                let _ = fs::remove_file(dir.join(format!("{}.deso", n.name)));
-            }
-        }
-        for (name, content) in &found {
-            valid(name)?;
-            if force && dir.join(format!("{name}.deso")).exists() { continue } // never clobber a hand-written note
-            fs::write(dir.join(format!("{name}.deso")), content).map_err(|e| e.to_string())?;
-        }
+        write_graph(&graph_dir(), &found)?;
         Ok(found.len())
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+// ---- API keys: one keychain entry holding all of them as JSON (see src/keys.ts) ----
+const KEYCHAIN: (&str, &str) = ("dev.deso.vault", "api-keys");
+
+fn keys_get(entry: (&str, &str)) -> Result<String, String> {
+    match keyring::Entry::new(entry.0, entry.1).map_err(|e| e.to_string())?.get_password() {
+        Ok(s) => Ok(s),
+        Err(keyring::Error::NoEntry) => Ok("{}".into()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
+fn keys_load() -> Result<String, String> { keys_get(KEYCHAIN) }
+
+#[tauri::command]
+fn keys_save(json: String) -> Result<(), String> {
+    keyring::Entry::new(KEYCHAIN.0, KEYCHAIN.1).and_then(|e| e.set_password(&json)).map_err(|e| e.to_string())
+}
+
+// ---- Keeping the graph current: a watcher re-scans (only the changes are written) when the project's files change ----
+static WATCHER: std::sync::Mutex<Option<notify_debouncer_mini::Debouncer<notify_debouncer_mini::notify::RecommendedWatcher>>> = std::sync::Mutex::new(None);
+
+/// A change worth a re-scan: not inside the graph itself, a build folder, version control or an agent worktree.
+fn relevant(p: &std::path::Path) -> bool {
+    !p.components().any(|c| { let c = c.as_os_str().to_string_lossy(); scan::SKIP_DIRS.contains(&&*c) || [".git", HIDDEN, ".armyx", ".armyx-worktrees", ".claude"].contains(&&*c) })
+}
+
+/// Starts watching the open project (replacing the watcher of the previous one). A scanned project is re-scanned two seconds after
+/// the last change and the app gets a `graph-changed` event; a folder of hand-written notes is left alone.
+#[tauri::command]
+fn watch_project(app: tauri::AppHandle) -> Result<(), String> {
+    use notify_debouncer_mini::{new_debouncer, notify::RecursiveMode};
+    use tauri::Emitter;
+    let r = root();
+    let mut deb = new_debouncer(std::time::Duration::from_secs(2), move |res: notify_debouncer_mini::DebounceEventResult| {
+        if !res.is_ok_and(|evs| evs.iter().any(|e| relevant(&e.path))) { return }
+        let scanned = notes().is_ok_and(|n| n.iter().any(|n| n.content.contains(GENERATED)));
+        if !scanned { return }
+        let found = scan::scan_cached(&root(), false); // only the files that changed are read again
+        if !found.is_empty() && write_graph(&graph_dir(), &found).is_ok_and(|n| n > 0) { let _ = app.emit("graph-changed", ()); }
+    }).map_err(|e| e.to_string())?;
+    deb.watcher().watch(&r, RecursiveMode::Recursive).map_err(|e| e.to_string())?;
+    *WATCHER.lock().unwrap_or_else(|e| e.into_inner()) = Some(deb);
+    Ok(())
 }
 
 // shortcut: fixed allow-list, no .cmd shim lookup on Windows; add PATHEXT handling if `claude` is an npm shim.
@@ -181,7 +244,9 @@ fn parse_codex(raw: &str) -> Option<Result<Answer, String>> {
 /// system: appended to claude's system prompt (agy has no such flag: it is prepended to the prompt); budget: USD cap per call.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
-async fn run_agent(cli: String, prompt: String, model: Option<String>, effort: Option<String>, session: Option<String>, resume: Option<bool>, tools: Option<String>, system: Option<String>, budget: Option<f64>) -> Result<Answer, String> {
+async fn run_agent(cli: String, prompt: String, model: Option<String>, effort: Option<String>, session: Option<String>, resume: Option<bool>, tools: Option<String>, system: Option<String>, budget: Option<f64>, worktree: Option<String>) -> Result<Answer, String> {
+    let cwd = match worktree.filter(|w| !w.is_empty()) { Some(id) => Some(worktree::dir(&root(), &id)?), None => None }; // never silently fall back to the real project
+    if cwd.as_ref().is_some_and(|d| !d.is_dir()) { return Err("the isolated worktree is gone: run the orchestra again".into()) }
     let model_opt = model.clone();
     let mut args: Vec<String> = model.filter(|m| !m.is_empty()).map(|m| vec!["--model".into(), m]).unwrap_or_default();
     if let Some(e) = effort.filter(|e| !e.is_empty()) { args.extend(["--effort".into(), e]) }
@@ -226,7 +291,7 @@ async fn run_agent(cli: String, prompt: String, model: Option<String>, effort: O
         _ => return Err(format!("unknown agent cli: {cli}")),
     };
     tauri::async_runtime::spawn_blocking(move || {
-        let run = spawn(&cli, &args, stdin_prompt);
+        let run = spawn_in(&cli, &args, stdin_prompt, cwd);
         if let Some(f) = temp { let _ = fs::remove_file(f); }
         let (o, writer) = run?;
         if let Some(w) = writer { let _ = w.join(); }
@@ -255,10 +320,13 @@ fn stop_agents() {
     }
 }
 
-fn spawn(cli: &str, args: &[String], input: Option<String>) -> Result<(std::process::Output, Option<std::thread::JoinHandle<()>>), String> {
-    // Agents work inside the active project folder, not the folder `tauri dev` happens to run from.
+type Spawned = Result<(std::process::Output, Option<std::thread::JoinHandle<()>>), String>;
+fn spawn(cli: &str, args: &[String], input: Option<String>) -> Spawned { spawn_in(cli, args, input, None) }
+
+/// `cwd` = a worktree for an isolated run; otherwise agents work inside the active project folder, not the folder `tauri dev` runs from.
+fn spawn_in(cli: &str, args: &[String], input: Option<String>, cwd: Option<PathBuf>) -> Spawned {
     let mut cmd = std::process::Command::new(if cfg!(windows) && cli == "codex" { "codex.cmd" } else { cli }); // npm installs codex as a .cmd shim
-    if root().is_dir() { cmd.current_dir(root()); }
+    match cwd { Some(d) => { cmd.current_dir(d); } None => if root().is_dir() { cmd.current_dir(root()); } }
     let mut child = cmd
         .args(args)
         .stdin(if input.is_some() { Stdio::piped() } else { Stdio::null() })
@@ -276,6 +344,31 @@ fn spawn(cli: &str, args: &[String], input: Option<String>) -> Result<(std::proc
     let out = child.wait_with_output();
     RUNNING.lock().unwrap_or_else(|e| e.into_inner()).retain(|p| *p != pid);
     Ok((out.map_err(|e| e.to_string())?, writer))
+}
+
+#[tauri::command]
+async fn worktree_create(id: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || worktree::create(&root(), &id).map(|d| d.to_string_lossy().into_owned())).await.map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn project_stamp(worktree: Option<String>) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let r = root();
+        let d = match worktree.filter(|w| !w.is_empty()) { Some(id) => worktree::dir(&r, &id)?, None => r };
+        Ok(worktree::stamp(&d))
+    }).await.map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn worktree_diff(id: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || worktree::diff(&root(), &id)).await.map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn worktree_apply(id: String) -> Result<bool, String> {
+    tauri::async_runtime::spawn_blocking(move || worktree::apply(&root(), &id)).await.map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn worktree_discard(id: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || worktree::discard(&root(), &id)).await.map_err(|e| e.to_string())?
 }
 
 /// Models the installed `agy` CLI accepts: (id, label) from `agy models`.
@@ -327,7 +420,50 @@ async fn agy_usage() -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::valid;
+    use super::*;
+
+    #[test]
+    fn write_graph_touches_only_what_changed() {
+        let dir = std::env::temp_dir().join(format!("armyx-wg-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let note = |n: &str, t: &str| (n.to_string(), format!("# {n}
+?generated: scan
+{t}
+"));
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("mine.deso"), "# mine
+hand-written
+").unwrap();
+        let a = vec![note("a", "one"), note("b", "two"), ("mine".to_string(), "# generated over it
+?generated: scan
+".to_string())];
+        assert_eq!(write_graph(&dir, &a).unwrap(), 2); // a and b; "mine" is never clobbered
+        assert_eq!(fs::read_to_string(dir.join("mine.deso")).unwrap(), "# mine
+hand-written
+");
+        assert_eq!(write_graph(&dir, &a).unwrap(), 0); // nothing changed, nothing written
+        let b = vec![note("a", "changed"), note("c", "new")];
+        assert_eq!(write_graph(&dir, &b).unwrap(), 3); // a rewritten, c added, b removed
+        assert!(!dir.join("b.deso").exists() && dir.join("c.deso").exists() && dir.join("mine.deso").exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn watcher_ignores_the_graph_and_build_folders() {
+        for p in ["/p/src/a.rs", "/p/README.md"] { assert!(relevant(std::path::Path::new(p)), "{p}") }
+        for p in ["/p/.desovault/a.deso", "/p/node_modules/x/i.js", "/p/.git/index", "/p/.armyx/graph/a.deso", "/p/target/debug/x"] { assert!(!relevant(std::path::Path::new(p)), "{p}") }
+    }
+
+    // Touches the real keychain (a throwaway entry), so it does not run on a headless CI box: cargo test -- --ignored
+    #[test]
+    #[ignore]
+    fn keychain_round_trip() {
+        let e = ("dev.deso.vault.test", "api-keys");
+        assert_eq!(keys_get(e).unwrap(), "{}");
+        keyring::Entry::new(e.0, e.1).unwrap().set_password("{\"deepseek\":\"sk-test\"}").unwrap();
+        assert!(keys_get(e).unwrap().contains("sk-test"));
+        keyring::Entry::new(e.0, e.1).unwrap().delete_credential().unwrap();
+    }
 
     #[test]
     fn valid_rejects_paths() {
@@ -340,7 +476,7 @@ mod tests {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![list_notes, read_note, save_note, delete_note, run_agent, stop_agents, agy_models, claude_usage, agy_usage, index_project, set_root, get_root, open_root])
+        .invoke_handler(tauri::generate_handler![list_notes, read_note, save_note, delete_note, run_agent, stop_agents, agy_models, claude_usage, agy_usage, keys_load, keys_save, watch_project, worktree_create, project_stamp, worktree_diff, worktree_apply, worktree_discard, index_project, set_root, get_root, open_root])
         .run(tauri::generate_context!())
         .expect("error while running Taurium");
 }

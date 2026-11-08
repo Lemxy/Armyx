@@ -5,28 +5,36 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
+    sync::{Arc, Mutex},
+    time::{Duration, SystemTime},
 };
 
 const MAX_FILES: usize = 20000; // files examined
 const MAX_NODES: usize = 5000; // notes written (most connected / largest first)
 const MAX_BYTES: u64 = 512 * 1024;
 const MAX_LINKS: usize = 25;
-const SKIP_DIRS: &[&str] = &["node_modules", "target", "dist", "build", "out", "vendor", "venv", "__pycache__", "coverage", "bin", "obj"];
+pub const SKIP_DIRS: &[&str] = &["node_modules", "target", "dist", "build", "out", "vendor", "venv", "__pycache__", "coverage", "bin", "obj"];
 const MAX_CALLS: usize = 8; // symbol edges kept per file, strongest first
 const EXTS: &[&str] = &["ts", "tsx", "js", "jsx", "mjs", "cjs", "py", "rs", "go", "java", "kt", "c", "h", "cpp", "hpp", "cs", "rb", "php", "swift", "md", "sh", "html", "css", "toml", "yml", "yaml"];
 
-struct File {
-    rel: String, // forward slashes
+/// What one file says on its own (no other file is needed to work it out), so it can be reused while the file stays as it is.
+struct Extract {
     ext: String,
     lines: usize,
     bytes: usize,
     about: String,
     doc: String, // what the comments and docstrings inside the file say, so a question phrased like them finds the file
     exports: Vec<String>,
-    imports: Vec<String>, // resolved rel paths (may point to files not in the set), later also cross-project edges
+    raw_imports: Vec<Vec<String>>, // per import: the candidate paths in order; the first one that exists in the project is the link
     syms: Syms,
+    idents: HashSet<String>, // identifiers of 5+ characters used in the file, for the symbol edges
+}
+
+struct File {
+    rel: String, // forward slashes
+    x: Arc<Extract>,
+    imports: Vec<String>, // resolved rel paths, later also cross-project and symbol edges
     degree: usize,
-    idents: HashSet<String>, // identifiers of 5+ characters used in the file, dropped after the symbol edges are built
     calls: Vec<(String, Vec<String>)>, // other file -> the symbols of it that this file uses
     callers: Vec<String>, // files that use symbols defined here
 }
@@ -41,7 +49,10 @@ struct Syms {
     uses_cmds: Vec<String>,
 }
 
-fn walk(dir: &Path, root: &Path, out: &mut Vec<PathBuf>) {
+/// A file the walk found, with the size and modification time it already had to look up.
+type Found = (PathBuf, u64, Option<SystemTime>);
+
+fn walk(dir: &Path, root: &Path, out: &mut Vec<Found>) {
     let Ok(rd) = fs::read_dir(dir) else { return };
     for e in rd.flatten() {
         if out.len() >= MAX_FILES { return }
@@ -54,7 +65,7 @@ fn walk(dir: &Path, root: &Path, out: &mut Vec<PathBuf>) {
         } else if t.is_file() {
             let ext = p.extension().and_then(|x| x.to_str()).unwrap_or("").to_lowercase();
             let keep = EXTS.contains(&ext.as_str()) || name.eq_ignore_ascii_case("makefile") || name.eq_ignore_ascii_case("dockerfile");
-            if keep && e.metadata().map(|m| m.len() <= MAX_BYTES).unwrap_or(false) { out.push(p) }
+            if let (true, Ok(m)) = (keep, e.metadata()) { if m.len() <= MAX_BYTES { out.push((p, m.len(), m.modified().ok())) } }
         }
     }
 }
@@ -110,18 +121,13 @@ fn ident(s: &str) -> String {
     s.trim_start().chars().take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '$').collect()
 }
 
-fn parse(rel_path: &str, ext: &str, src: &str, all: &HashSet<String>) -> (String, Vec<String>, Vec<String>) {
+fn parse(rel_path: &str, ext: &str, src: &str) -> (String, Vec<String>, Vec<Vec<String>>) {
     let dir = dir_of(rel_path);
     let mut exports = vec![];
     let mut imports = vec![];
     let mut about = String::new();
     let add = |e: &mut Vec<String>, s: String| { if !s.is_empty() && !e.contains(&s) && e.len() < 8 { e.push(s) } };
-    let try_resolve = |imports: &mut Vec<String>, base: String, cands: &[&str]| {
-        for c in cands {
-            let p = format!("{base}{c}");
-            if all.contains(&p) { if !imports.contains(&p) { imports.push(p) } return }
-        }
-    };
+    let try_resolve = |imports: &mut Vec<Vec<String>>, base: String, cands: &[&str]| imports.push(cands.iter().map(|c| format!("{base}{c}")).collect());
     for (i, raw) in src.lines().enumerate() {
         let line = raw.trim_end();
         let t = line.trim_start();
@@ -252,32 +258,92 @@ fn clean(s: &str) -> String { s.replace('\n', " ").trim().to_string() }
 /// Note format version: bump when a property changes meaning, so a stale graph can be told from a current one.
 pub const SCHEMA: u32 = 2; // 2: `~` before a file in ?calls / ?callers marks a link guessed by symbol name
 
-pub fn scan(root: &Path) -> Vec<(String, String)> {
-    let mut paths = vec![];
-    walk(root, root, &mut paths);
-    paths.sort();
-    let all: HashSet<String> = paths.iter().map(|p| rel(p, root)).collect();
-
-    let mut files: Vec<File> = vec![];
-    for p in &paths {
-        let Ok(src) = fs::read_to_string(p) else { continue };
-        let r = rel(p, root);
-        let ext = p.extension().and_then(|x| x.to_str()).unwrap_or("").to_lowercase();
-        let (about, exports, imports) = parse(&r, &ext, &src, &all);
-        let syms = syms(&ext, &src);
-        files.push(File { rel: r, doc: doc_text(&ext, &src), ext, lines: src.lines().count(), bytes: src.len(), about, exports, imports, syms, degree: 0, idents: ident_set(&src), calls: vec![], callers: vec![] });
+/// The first candidate of each import that is a file of the project (a link to a file outside the set is dropped).
+fn resolve(raw: &[Vec<String>], all: &HashSet<String>) -> Vec<String> {
+    let mut out: Vec<String> = vec![];
+    for cands in raw {
+        if let Some(p) = cands.iter().find(|p| all.contains(*p)) { if !out.contains(p) { out.push(p.clone()) } }
     }
+    out
+}
+
+struct Cached {
+    len: u64,
+    mtime: Option<SystemTime>,
+    racy: bool, // changed within the last two seconds when read: a coarse clock may hide the next edit, so read it again
+    x: Arc<Extract>,
+}
+
+/// Remembers what each file said (by size and modification time), so a rescan reads and parses only the files that changed.
+/// The links between files are always worked out again from the whole set, so the result is the same as a full scan.
+#[derive(Default)]
+pub struct Scanner {
+    cache: HashMap<String, Cached>,
+    pub parsed: usize, // files read in the last scan
+}
+
+static SCANNER: Mutex<Option<(PathBuf, Scanner)>> = Mutex::new(None);
+
+/// A scan that reuses what the previous one of the same folder learned; `fresh` forgets it first.
+pub fn scan_cached(root: &Path, fresh: bool) -> Vec<(String, String)> {
+    let mut g = SCANNER.lock().unwrap_or_else(|e| e.into_inner());
+    if fresh || g.as_ref().is_none_or(|(r, _)| r != root) { *g = Some((root.to_path_buf(), Scanner::default())) }
+    g.as_mut().unwrap().1.scan(root)
+}
+
+pub fn scan(root: &Path) -> Vec<(String, String)> {
+    Scanner::default().scan(root)
+}
+
+impl Scanner {
+    fn extract(r: &str, ext: &str, src: &str) -> Extract {
+        let (about, exports, raw_imports) = parse(r, ext, src);
+        Extract { ext: ext.to_string(), lines: src.lines().count(), bytes: src.len(), about, doc: doc_text(ext, src), exports, raw_imports, syms: syms(ext, src), idents: ident_set(src) }
+    }
+
+    pub fn scan(&mut self, root: &Path) -> Vec<(String, String)> {
+        let mut paths = vec![];
+        walk(root, root, &mut paths);
+        paths.sort();
+        let all: HashSet<String> = paths.iter().map(|(p, _, _)| rel(p, root)).collect();
+        self.cache.retain(|k, _| all.contains(k)); // deleted files
+        self.parsed = 0;
+        let now = SystemTime::now();
+
+        let mut files: Vec<File> = vec![];
+        for (p, len, mtime) in &paths {
+            let (len, mtime) = (*len, *mtime);
+            let r = rel(p, root);
+            let x = match self.cache.get(&r) {
+                Some(c) if !c.racy && c.len == len && c.mtime == mtime && mtime.is_some() => c.x.clone(),
+                _ => {
+                    let Ok(src) = fs::read_to_string(p) else { self.cache.remove(&r); continue };
+                    let ext = p.extension().and_then(|x| x.to_str()).unwrap_or("").to_lowercase();
+                    let x = Arc::new(Self::extract(&r, &ext, &src));
+                    let racy = mtime.is_none_or(|m| now.duration_since(m).map_or(true, |d| d < Duration::from_secs(2)));
+                    self.cache.insert(r.clone(), Cached { len, mtime, racy, x: x.clone() });
+                    self.parsed += 1;
+                    x
+                }
+            };
+            files.push(File { imports: resolve(&x.raw_imports, &all), rel: r, x, degree: 0, calls: vec![], callers: vec![] });
+        }
+        Self::build(root, files)
+    }
+
+    /// The part that needs every file: links, degrees, which notes to keep, and the notes themselves.
+    fn build(root: &Path, mut files: Vec<File>) -> Vec<(String, String)> {
     if files.is_empty() { return vec![] }
 
     // A file that mentions a route or Tauri command points at the file that defines it (server <-> launcher <-> bot).
     let mut route_def: HashMap<String, Vec<String>> = HashMap::new();
     let mut cmd_def: HashMap<String, Vec<String>> = HashMap::new();
     for f in &files {
-        for r in f.syms.routes.iter().filter(|r| r.len() > 5) { route_def.entry(r.clone()).or_default().push(f.rel.clone()) }
-        for c in &f.syms.cmds { cmd_def.entry(c.clone()).or_default().push(f.rel.clone()) }
+        for r in f.x.syms.routes.iter().filter(|r| r.len() > 5) { route_def.entry(r.clone()).or_default().push(f.rel.clone()) }
+        for c in &f.x.syms.cmds { cmd_def.entry(c.clone()).or_default().push(f.rel.clone()) }
     }
     for f in &mut files {
-        let found: Vec<String> = f.syms.uses_routes.iter().filter_map(|r| route_def.get(r)).chain(f.syms.uses_cmds.iter().filter_map(|c| cmd_def.get(c))).flatten().cloned().collect();
+        let found: Vec<String> = f.x.syms.uses_routes.iter().filter_map(|r| route_def.get(r)).chain(f.x.syms.uses_cmds.iter().filter_map(|c| cmd_def.get(c))).flatten().cloned().collect();
         for d in found { if d != f.rel && !f.imports.contains(&d) { f.imports.push(d) } }
     }
 
@@ -286,11 +352,11 @@ pub fn scan(root: &Path) -> Vec<(String, String)> {
     // Symbol-level edges, deeper than imports: a file that uses a function, class or constant defined in exactly one other file
     // points at it (calls, inheritance, shared constants), even without an import line (dynamic loading, same package, other language).
     let mut def_in: HashMap<&str, Vec<usize>> = HashMap::new();
-    for (i, f) in files.iter().enumerate() { for y in f.syms.other.iter().filter(|y| y.len() >= 6 || (y.len() == 5 && y.starts_with(char::is_uppercase)) || y.contains('_')) { def_in.entry(y.as_str()).or_default().push(i) } }
+    for (i, f) in files.iter().enumerate() { for y in f.x.syms.other.iter().filter(|y| y.len() >= 6 || (y.len() == 5 && y.starts_with(char::is_uppercase)) || y.contains('_')) { def_in.entry(y.as_str()).or_default().push(i) } }
     let mut found: Vec<Vec<(usize, Vec<String>)>> = vec![];
     for (i, f) in files.iter().enumerate() {
         let mut by_file: HashMap<usize, Vec<String>> = HashMap::new();
-        for w in &f.idents { if let Some([j]) = def_in.get(w.as_str()).map(|v| v.as_slice()) { if *j != i { by_file.entry(*j).or_default().push(w.clone()) } } }
+        for w in &f.x.idents { if let Some([j]) = def_in.get(w.as_str()).map(|v| v.as_slice()) { if *j != i { by_file.entry(*j).or_default().push(w.clone()) } } }
         let mut v: Vec<(usize, Vec<String>)> = by_file.into_iter().collect();
         for (_, syms) in &mut v { syms.sort() }
         v.sort_by(|a, b| b.1.len().cmp(&a.1.len()).then(files[a.0].rel.cmp(&files[b.0].rel)));
@@ -306,7 +372,7 @@ pub fn scan(root: &Path) -> Vec<(String, String)> {
             files[i].calls.push((format!("{mark}{to}"), syms.into_iter().take(3).collect()));
         }
     }
-    for f in &mut files { f.idents = HashSet::new(); f.callers.sort_by_key(|c| (c.starts_with('~'), c.clone())); f.callers.truncate(MAX_CALLS) }
+    for f in &mut files { f.callers.sort_by_key(|c| (c.starts_with('~'), c.clone())); f.callers.truncate(MAX_CALLS) }
 
     let mut deg: HashMap<String, usize> = HashMap::new();
     for f in &files {
@@ -314,9 +380,9 @@ pub fn scan(root: &Path) -> Vec<(String, String)> {
     }
     for f in &mut files { f.degree = deg.get(&f.rel).copied().unwrap_or(0) }
     let total = files.len();
-    let source_bytes: usize = files.iter().map(|f| f.bytes).sum(); // all scanned files, not just the indexed ones
+    let source_bytes: usize = files.iter().map(|f| f.x.bytes).sum(); // all scanned files, not just the indexed ones
     // Keep the most useful nodes; ties broken by size, then path (deterministic).
-    files.sort_by(|a, b| (b.degree * 100 + b.lines.min(99)).cmp(&(a.degree * 100 + a.lines.min(99))).then(a.rel.cmp(&b.rel)));
+    files.sort_by(|a, b| (b.degree * 100 + b.x.lines.min(99)).cmp(&(a.degree * 100 + a.x.lines.min(99))).then(a.rel.cmp(&b.rel)));
     files.truncate(std::env::var("ARMYX_MAX_NODES").ok().and_then(|v| v.parse().ok()).unwrap_or(MAX_NODES)); // the env override is for the CLI and benchmarks; the app keeps its cap
     files.sort_by(|a, b| a.rel.cmp(&b.rel));
 
@@ -328,19 +394,19 @@ pub fn scan(root: &Path) -> Vec<(String, String)> {
     for f in &files {
         let top = f.rel.split('/').next().filter(|_| f.rel.contains('/')).unwrap_or(".");
         *by_dir.entry(top.to_string()).or_default() += 1;
-        let mut s = format!("# {}\n?path: {}\n?kind: {}\n?lines: {}\n?generated: scan\n", f.rel, f.rel, f.ext, f.lines);
-        if !f.about.is_empty() { s += &format!("?about: {}\n", clean(&f.about)) }
-        if !f.doc.is_empty() { s += &format!("?doc: {}
-", clean(&f.doc)) }
+        let mut s = format!("# {}\n?path: {}\n?kind: {}\n?lines: {}\n?generated: scan\n", f.rel, f.rel, f.x.ext, f.x.lines);
+        if !f.x.about.is_empty() { s += &format!("?about: {}\n", clean(&f.x.about)) }
+        if !f.x.doc.is_empty() { s += &format!("?doc: {}
+", clean(&f.x.doc)) }
         if !f.calls.is_empty() { s += &format!("?calls: {}
 ", f.calls.iter().map(|(p, y)| format!("{p}({})", y.join("+"))).collect::<Vec<_>>().join(", ")) }
         if !f.callers.is_empty() { s += &format!("?callers: {}
 ", f.callers.join(", ")) }
-        if !f.exports.is_empty() { s += &format!("?exports: {}\n", f.exports.join(", ")) }
-        let sy: Vec<&str> = f.syms.routes.iter().chain(&f.syms.cmds).chain(&f.syms.other).map(|x| x.as_str()).take(60).collect();
+        if !f.x.exports.is_empty() { s += &format!("?exports: {}\n", f.x.exports.join(", ")) }
+        let sy: Vec<&str> = f.x.syms.routes.iter().chain(&f.x.syms.cmds).chain(&f.x.syms.other).map(|x| x.as_str()).take(60).collect();
         if !sy.is_empty() { s += &format!("?symbols: {}\n", sy.join(", ")) }
         let tag: String = top.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
-        s += &format!("#{}", if f.ext.is_empty() { "file" } else { &f.ext });
+        s += &format!("#{}", if f.x.ext.is_empty() { "file" } else { &f.x.ext });
         if tag.chars().next().is_some_and(|c| c.is_ascii_alphabetic()) { s += &format!(" #{tag}") }
         s += "\n";
         for i in f.imports.iter().filter_map(|i| names.get(i)).take(MAX_LINKS) { s += &format!("->@{i}\n") }
@@ -356,6 +422,7 @@ pub fn scan(root: &Path) -> Vec<(String, String)> {
     for h in hubs.iter().filter(|h| h.degree > 0).take(12) { m += &format!("->@{}\n", names[&h.rel]) }
     out.push(("project-map".into(), m));
     out
+    }
 }
 
 #[cfg(test)]
@@ -456,5 +523,56 @@ pub async fn auth_pay() {
     fn join_normalizes() {
         assert_eq!(join("src/ui", "../lib/x"), "src/lib/x");
         assert_eq!(join("", "./a"), "a");
+    }
+
+    #[test]
+    fn incremental_scan_equals_a_full_scan_and_reads_only_what_changed() {
+        let dir = std::env::temp_dir().join(format!("deso-inc-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("src")).unwrap();
+        let ago = |f: &str, secs: u64| fs::File::options().write(true).open(dir.join(f)).unwrap().set_modified(SystemTime::now() - Duration::from_secs(secs)).unwrap();
+        let put = |f: &str, text: &str, secs: u64| { fs::write(dir.join(f), text).unwrap(); ago(f, secs) };
+        put("src/a.ts", "// entry
+import { b } from './b'
+import { c } from './c'
+export function mainEntry() { return helperFunction() + b + c }
+", 60);
+        put("src/b.ts", "export const b = 1
+", 60);
+        put("src/util.py", "def helperFunction():
+    return 1
+", 60);
+        let mut sc = Scanner::default();
+        let same = |sc: &mut Scanner| assert_eq!(sc.scan(&dir), scan(&dir));
+
+        same(&mut sc);
+        assert_eq!(sc.parsed, 3);
+        same(&mut sc);
+        assert_eq!(sc.parsed, 0, "nothing changed, nothing is read");
+
+        put("src/b.ts", "export const b = 2
+export const more = 3
+", 50); // edited
+        same(&mut sc);
+        assert_eq!(sc.parsed, 1);
+
+        put("src/c.ts", "export const c = 3
+", 60); // a new file that a.ts already imports: a.ts is not read again, its link appears
+        let before = sc.scan(&dir).iter().find(|n| n.0 == "src-a-ts").unwrap().1.clone();
+        assert_eq!(sc.parsed, 1, "only the new file is read");
+        assert!(before.contains("->@src-c-ts"), "{before}");
+        same(&mut sc);
+
+        fs::remove_file(dir.join("src/b.ts")).unwrap(); // a deleted file: its links go, nothing else is read
+        same(&mut sc);
+        assert_eq!(sc.parsed, 0);
+        assert!(!sc.scan(&dir).iter().find(|n| n.0 == "src-a-ts").unwrap().1.contains("src-b-ts"));
+
+        fs::write(dir.join("src/c.ts"), "export const c = 4
+").unwrap(); // edited just now: the clock may not tell the next edit apart, so it is read every time
+        same(&mut sc);
+        let _ = sc.scan(&dir);
+        assert_eq!(sc.parsed, 1);
+        let _ = fs::remove_dir_all(&dir);
     }
 }

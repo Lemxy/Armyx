@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Gauge, Network, PenLine, Settings, Sparkles, Workflow } from 'lucide-react'
 import { mapVsSource, savings, type Note } from './deso'
-import { backend, deleteNote, inTauri, loadNotes, rescanProject, saveNote, activeProject, switchProject } from './vault'
+import { backend, deleteNote, inTauri, loadNotes, onGraphChanged, rescanProject, saveNote, activeProject, switchProject, watchProject } from './vault'
 import { useI18n } from './i18n'
 import SettingsModal from './components/SettingsModal'
 import ProjectModal from './components/ProjectModal'
@@ -44,6 +44,14 @@ export default function App() {
   useEffect(() => {
     loadNotes().then((n) => { setNotes(n); setCurrent(n[0]?.name ?? '') }).catch(console.error)
   }, [])
+
+  // The graph follows the code: a watcher in the backend re-scans after files change; generated notes are swapped in, what you wrote or are editing stays.
+  useEffect(() => {
+    const gen = (n: Note) => n.content.includes('?generated: scan')
+    watchProject().catch(console.error)
+    const off = onGraphChanged(() => loadNotes().then((fresh) => setNotes((cur) => [...cur.filter((n) => !gen(n)), ...fresh.filter(gen)].sort((a, b) => a.name.localeCompare(b.name)))).catch(console.error))
+    return () => { off.then((f) => f()) }
+  }, [project])
 
   // Native feel: no browser context menu anywhere; Ctrl/Cmd+J toggles the agent panel.
   useEffect(() => {

@@ -3,7 +3,7 @@ import { ArrowUp, Check, ChevronDown, Clock, Copy, CornerDownLeft, FolderOpen, P
 import Segmented from './Segmented'
 import Markdown from './Markdown'
 import { useI18n } from '../i18n'
-import { graphMap, MAP_INTRO, tokens, topHits, type Note } from '../deso'
+import { graphMap, MAP_INTRO, tokens, type Note } from '../deso'
 import { getKey, setKey } from '../keys'
 import { dsChat } from '../deepseek'
 import { agyModels, agyUsage, claudeUsage, inTauri, openRoot, runAgentCli } from '../vault'
@@ -173,12 +173,8 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
     if (!chat) { cid = uid(); setChats((cs) => [{ id: cid, title: text.slice(0, 48), msgs: [user], at: Date.now() }, ...cs]); setActiveId(cid) }
     else patch(cid, (c) => ({ ...c, msgs: [...c.msgs, user], at: Date.now() }))
     setPrompt(''); setBusy(true)
-    // the map stays identical between questions (prompt-cacheable); the files closest to this question ride along with it
-    const hits = topHits(notes, text)
-    const history = trim([...msgs, user]).map((m) => (m === user && hits ? { ...m, text: `# Best matches
-${hits}
-
-${m.text}` } : m))
+    // the map stays identical between questions, so the provider's prompt cache can reuse it
+    const history = trim([...msgs, user])
     const system = SYSTEM(map)
     const tin = tokens(system + history.map((m) => m.text).join('\n'))
     let reply: Msg

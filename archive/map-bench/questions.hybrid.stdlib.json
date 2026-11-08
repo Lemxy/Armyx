@@ -1,0 +1,902 @@
+[
+ {
+  "q": "Which file defines the Python function documented as: \"Produces metadata records for every package, descending into nested subpackages as it goes.\"? Reply with the repo-relative path only.",
+  "expect": "pkgutil.py",
+  "verify": "walk_packages",
+  "original": "Yields ModuleInfo for all modules recursively"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"A test case that encloses a callable serving as a test.\"? Reply with the repo-relative path only.",
+  "expect": "unittest/case.py",
+  "verify": "FunctionTestCase",
+  "original": "A test case that wraps a test function."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Help text generator that appends fallback settings to option descriptions.\"? Reply with the repo-relative path only.",
+  "expect": "argparse.py",
+  "verify": "ArgumentDefaultsHelpFormatter",
+  "original": "Help message formatter which adds default values to argument help."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Yield a pair of the current stop-point and the one-shot marker that gets cleared, or two empty values (None, None)\"? Reply with the repo-relative path only.",
+  "expect": "bdb.py",
+  "verify": "effective",
+  "original": "Return (active breakpoint, delete temporary flag) or (None, None) as"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Take this pane off view so it is not seen.\"? Reply with the repo-relative path only.",
+  "expect": "tkinter/__init__.py",
+  "verify": "wm_withdraw",
+  "original": "Withdraw this widget from the screen such that it is unmapped"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Give back a read-only row of data from each part of the item, in turn.\"? Reply with the repo-relative path only.",
+  "expect": "dataclasses.py",
+  "verify": "astuple",
+  "original": "Return the fields of a dataclass instance as a new tuple of field values."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Launch the supplied callable non-blockingly within an auxiliary worker.\"? Reply with the repo-relative path only.",
+  "expect": "asyncio/threads.py",
+  "verify": "to_thread",
+  "original": "Asynchronously run function *func* in a separate thread."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Configures the test-run reporting switches.\"? Reply with the repo-relative path only.",
+  "expect": "doctest.py",
+  "verify": "set_unittest_reportflags",
+  "original": "Sets the unittest option flags."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Assign the name text for the current conversation.\"? Reply with the repo-relative path only.",
+  "expect": "threading.py",
+  "verify": "setName",
+  "original": "Set the name string for this thread."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Fetch the lone scope tied to this identifier.\"? Reply with the repo-relative path only.",
+  "expect": "symtable.py",
+  "verify": "get_namespace",
+  "original": "Return the single namespace bound to this name."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Make a fresh scratch folder and hand back its location.\"? Reply with the repo-relative path only.",
+  "expect": "tempfile.py",
+  "verify": "TemporaryDirectory",
+  "original": "Create and return a temporary directory.  This has the same"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Yields a pair of numeric status and printed text after running a command string through the system interpreter.\"? Reply with the repo-relative path only.",
+  "expect": "subprocess.py",
+  "verify": "getstatusoutput",
+  "original": "Return (exitcode, output) of executing cmd in a shell."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Make a file from a tar item of odd kind\"? Reply with the repo-relative path only.",
+  "expect": "tarfile.py",
+  "verify": "makeunknown",
+  "original": "Make a file from a TarInfo object with an unknown type"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Launch the program stored at the supplied path on disk.\"? Reply with the repo-relative path only.",
+  "expect": "runpy.py",
+  "verify": "run_path",
+  "original": "Execute code located at the specified filesystem location."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Return a collection of entries for an error stack's current level and every level beneath it.\"? Reply with the repo-relative path only.",
+  "expect": "inspect.py",
+  "verify": "getinnerframes",
+  "original": "Get a list of records for a traceback's frame and all lower frames."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Infer the correct db library for opening a db file.\"? Reply with the repo-relative path only.",
+  "expect": "dbm/__init__.py",
+  "verify": "whichdb",
+  "original": "Guess which db package to use to open a db file."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"A single-entry container pairing one key with its associated datum.\"? Reply with the repo-relative path only.",
+  "expect": "http/cookies.py",
+  "verify": "Morsel",
+  "original": "A class to hold ONE (key, value) pair."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Retrieve the list of storage-limit anchors for a specified inbox.\"? Reply with the repo-relative path only.",
+  "expect": "imaplib.py",
+  "verify": "getquotaroot",
+  "original": "Get the list of quota roots for the named mailbox."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Erase every mark, or just the opening or closing n of the pen's impressions.\"? Reply with the repo-relative path only.",
+  "expect": "turtle.py",
+  "verify": "clearstamps",
+  "original": "Delete all or first/last n of turtle's stamps."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Give True when a byte must be put in =XX form for QP text part.\"? Reply with the repo-relative path only.",
+  "expect": "email/quoprimime.py",
+  "verify": "body_check",
+  "original": "Return True if the octet should be escaped with body quopri."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Give back the bits of a stat-style mode value that chmod is able to alter, dropping type information.\"? Reply with the repo-relative path only.",
+  "expect": "stat.py",
+  "verify": "S_IMODE",
+  "original": "Return the portion of the file's mode that can be set by"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Turn the body of the item into Base64 text.\"? Reply with the repo-relative path only.",
+  "expect": "email/encoders.py",
+  "verify": "encode_base64",
+  "original": "Encode the message's payload in Base64."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Handle and hand back items previously buffered in the lines, on demand.\"? Reply with the repo-relative path only.",
+  "expect": "telnetlib.py",
+  "verify": "read_lazy",
+  "original": "Process and return data that's already in the queues (lazy)."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Give back the version where this capability turns required.\"? Reply with the repo-relative path only.",
+  "expect": "__future__.py",
+  "verify": "getMandatoryRelease",
+  "original": "Return release in which this feature will become mandatory."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"This routine accepts a feed descriptor plus an extra base address and\"? Reply with the repo-relative path only.",
+  "expect": "xml/sax/saxutils.py",
+  "verify": "prepare_input_source",
+  "original": "This function takes an InputSource and an optional base URL and"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Thrown when a catalog action combined with packaging goes wrong.\"? Reply with the repo-relative path only.",
+  "expect": "shutil.py",
+  "verify": "RegistryError",
+  "original": "Raised when a registry operation with the archiving"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Gives a best pick, either http or secure http, for the WSGI key that holds the site's web protocol.\"? Reply with the repo-relative path only.",
+  "expect": "wsgiref/util.py",
+  "verify": "guess_scheme",
+  "original": "Return a guess for whether 'wsgi.url_scheme' should be 'http' or 'https'"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Tiny WSGI app to emit fail text\"? Reply with the repo-relative path only.",
+  "expect": "wsgiref/handlers.py",
+  "verify": "error_output",
+  "original": "WSGI mini-app to create error output"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"A wrapper for use in a with-block that governs the lifetime of an asyncio loop.\"? Reply with the repo-relative path only.",
+  "expect": "asyncio/runners.py",
+  "verify": "Runner",
+  "original": "A context manager that controls event loop life cycle."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Find all indices in the program's instruction stream that act as branch destinations.\"? Reply with the repo-relative path only.",
+  "expect": "dis.py",
+  "verify": "findlabels",
+  "original": "Detect all offsets in a byte code which are jump targets."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Contract tying a SAX notification to its source XML file.\"? Reply with the repo-relative path only.",
+  "expect": "xml/sax/xmlreader.py",
+  "verify": "Locator",
+  "original": "Interface for associating a SAX event with a document"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Trigger the namespace-supplying hook of the fitting type constructor.\"? Reply with the repo-relative path only.",
+  "expect": "types.py",
+  "verify": "prepare_class",
+  "original": "Call the __prepare__ method of the appropriate metaclass."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Gives True when the runtime is able to open connection-oriented byte-channel endpoints.\"? Reply with the repo-relative path only.",
+  "expect": "socket.py",
+  "verify": "has_dualstack_ipv6",
+  "original": "Return True if the platform supports creating a SOCK_STREAM socket"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Run a .pth file in the site dir.\"? Reply with the repo-relative path only.",
+  "expect": "site.py",
+  "verify": "addpackage",
+  "original": "Process a .pth file within the site-packages directory:"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Reserved indicator for declaring a type as a synonym of another type.\"? Reply with the repo-relative path only.",
+  "expect": "typing.py",
+  "verify": "TypeAlias",
+  "original": "Special form for marking type aliases."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Pull out stored browser state from the reply, but only when the call is permitted.\"? Reply with the repo-relative path only.",
+  "expect": "http/cookiejar.py",
+  "verify": "extract_cookies",
+  "original": "Extract cookies from response, where allowable given the request."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Gradually read an XML file in chunks, building a tree of nodes as it goes.\"? Reply with the repo-relative path only.",
+  "expect": "xml/etree/ElementTree.py",
+  "verify": "iterparse",
+  "original": "Incrementally parse XML document into ElementTree."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"When the given argument is present, the instance is handed back; when that argument is absent,\"? Reply with the repo-relative path only.",
+  "expect": "tkinter/ttk.py",
+  "verify": "setup_master",
+  "original": "If master is not None, itself is returned. If master is None,"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Reusable add-on component that provides the public and system identifier properties.\"? Reply with the repo-relative path only.",
+  "expect": "xml/dom/minidom.py",
+  "verify": "Identified",
+  "original": "Mix-in class that supports the publicId and systemId attributes."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Gets the full path of this item. Most use of it is to set\"? Reply with the repo-relative path only.",
+  "expect": "tkinter/tix.py",
+  "verify": "OptionName",
+  "original": "Returns the qualified path name for the widget. Normally used to set"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Give the slot number (0 for Monday through 6 for Sunday) that the 1st of the calendar period lands on.\"? Reply with the repo-relative path only.",
+  "expect": "calendar.py",
+  "verify": "monthrange",
+  "original": "Return weekday of first day of month (0-6 ~ Mon-Sun)"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Produce an evenly drawn sample from a up to b, with the upper limit excluded or included per the flag setting.\"? Reply with the repo-relative path only.",
+  "expect": "random.py",
+  "verify": "uniform",
+  "original": "Get a random number in the range [a, b) or [a, b] depending on rounding."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Returns the threshold value x at which the chance that X is at most x equals the supplied probability p.\"? Reply with the repo-relative path only.",
+  "expect": "statistics.py",
+  "verify": "inv_cdf",
+  "original": "Inverse cumulative distribution function.  x : P(X <= x) = p"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Foundation type for failures carrying an SMTP reply status.\"? Reply with the repo-relative path only.",
+  "expect": "smtplib.py",
+  "verify": "SMTPResponseException",
+  "original": "Base class for all exceptions that include an SMTP error code."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Position finder for pairing with the XML reader type.\"? Reply with the repo-relative path only.",
+  "expect": "xml/sax/expatreader.py",
+  "verify": "ExpatLocator",
+  "original": "Locator for use with the ExpatParser class."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Builds the serialized argument portion of an XML-RPC remote call from a mapping object.\"? Reply with the repo-relative path only.",
+  "expect": "xmlrpc/client.py",
+  "verify": "Marshaller",
+  "original": "Generate an XML-RPC params chunk from a Python data structure."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Download text line by line, opening a fresh data connection automatically for the transfer.\"? Reply with the repo-relative path only.",
+  "expect": "ftplib.py",
+  "verify": "retrlines",
+  "original": "Retrieve data in line mode.  A new port is created for you."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Adds a handler that answers incoming XML-RPC calls.\"? Reply with the repo-relative path only.",
+  "expect": "xmlrpc/server.py",
+  "verify": "register_function",
+  "original": "Registers a function to respond to XML-RPC requests."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Recompute the group of unimplemented function signatures declared by a non-instantiable type.\"? Reply with the repo-relative path only.",
+  "expect": "abc.py",
+  "verify": "update_abstractmethods",
+  "original": "Recalculate the set of abstract methods of an abstract class."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Break down a passage of text, using the surrounding source it was taken from.\"? Reply with the repo-relative path only.",
+  "expect": "xml/dom/expatbuilder.py",
+  "verify": "parseFragment",
+  "original": "Parse a fragment of a document, given the context from which it"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Find hits when the input is just a bare name.\"? Reply with the repo-relative path only.",
+  "expect": "rlcompleter.py",
+  "verify": "global_matches",
+  "original": "Compute matches when text is a simple name."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Yield an unpredictable web-safe sequence of characters in the sixty-four symbol scheme that swaps plus and slash for hyphen and underscore.\"? Reply with the repo-relative path only.",
+  "expect": "secrets.py",
+  "verify": "token_urlsafe",
+  "original": "Return a random URL-safe text string, in Base64 encoding."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Yields the MIME label describing how the message payload is packed for transmission.\"? Reply with the repo-relative path only.",
+  "expect": "email/charset.py",
+  "verify": "get_body_encoding",
+  "original": "Return the content-transfer-encoding used for body encoding."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Show a small popup panel letting someone pick a hue.\"? Reply with the repo-relative path only.",
+  "expect": "tkinter/colorchooser.py",
+  "verify": "askcolor",
+  "original": "Display dialog window for selection of a color."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Mail retrieval wrapper for encrypted Post Office Protocol version three sessions.\"? Reply with the repo-relative path only.",
+  "expect": "poplib.py",
+  "verify": "POP3_SSL",
+  "original": "POP3 client class over SSL connection"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Scan a document, locate each element, and invoke the matching callback.\"? Reply with the repo-relative path only.",
+  "expect": "html/parser.py",
+  "verify": "HTMLParser",
+  "original": "Find tags and other markup and call handler functions."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Consume bytes from an input channel, returning once the delimiter sequence appears.\"? Reply with the repo-relative path only.",
+  "expect": "asyncio/streams.py",
+  "verify": "readuntil",
+  "original": "Read data from the stream until ``separator`` is found."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Hand back a walker over the contents of the value when it can be looped over.\"? Reply with the repo-relative path only.",
+  "expect": "importlib/metadata/_itertools.py",
+  "verify": "always_iterable",
+  "original": "If *obj* is iterable, return an iterator over its items::"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Wraps one fault or caution from XML parsing and holds that notice.\"? Reply with the repo-relative path only.",
+  "expect": "xml/sax/_exceptions.py",
+  "verify": "SAXException",
+  "original": "Encapsulate an XML error or warning. This class can contain"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Test if a name fits a glob, true or false.\"? Reply with the repo-relative path only.",
+  "expect": "fnmatch.py",
+  "verify": "fnmatch",
+  "original": "Test whether FILENAME matches PATTERN."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Give back a sequence of five-element groups that explain the edit steps needed to convert a into b.\"? Reply with the repo-relative path only.",
+  "expect": "difflib.py",
+  "verify": "get_opcodes",
+  "original": "Return list of 5-tuples describing how to turn a into b."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Launch async tasks spaced apart by delays, returning whichever completes earliest.\"? Reply with the repo-relative path only.",
+  "expect": "asyncio/staggered.py",
+  "verify": "staggered_race",
+  "original": "Run coroutines with staggered start times and take the first to finish."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Runs __aenter__ on the fed-in one.\"? Reply with the repo-relative path only.",
+  "expect": "unittest/async_case.py",
+  "verify": "enterAsyncContext",
+  "original": "Enters the supplied asynchronous context manager."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"The kernel's zero-copy file transfer call is unsupported on this system.\"? Reply with the repo-relative path only.",
+  "expect": "asyncio/exceptions.py",
+  "verify": "SendfileNotAvailableError",
+  "original": "Sendfile syscall is not available."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Turn an IP span's start and end into a compact set of CIDR blocks\"? Reply with the repo-relative path only.",
+  "expect": "ipaddress.py",
+  "verify": "summarize_address_range",
+  "original": "Summarize a network range given the first and last IP addresses."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Contract for taking in notifications about structured page material.\"? Reply with the repo-relative path only.",
+  "expect": "xml/sax/handler.py",
+  "verify": "ContentHandler",
+  "original": "Interface for receiving logical document content events."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Hand back the current asyncio loop; throw a Python exception of the built-in kind when no loop is active.\"? Reply with the repo-relative path only.",
+  "expect": "asyncio/events.py",
+  "verify": "get_running_loop",
+  "original": "Return the running event loop.  Raise a RuntimeError if there is none."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Toggle map: flags enabled per capability of the HTML constructor utility.\"? Reply with the repo-relative path only.",
+  "expect": "xml/dom/xmlbuilder.py",
+  "verify": "Options",
+  "original": "Features object that has variables set for each DOMBuilder feature."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Show a query to the user, then capture one typed line.\"? Reply with the repo-relative path only.",
+  "expect": "code.py",
+  "verify": "raw_input",
+  "original": "Write a prompt and read a line."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Callable attribute that routes calls to implementations chosen by the type of the first argument.\"? Reply with the repo-relative path only.",
+  "expect": "functools.py",
+  "verify": "singledispatchmethod",
+  "original": "Single-dispatch generic method descriptor."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Produce browsable web pages describing each package file across every subfolder beneath a root path.\"? Reply with the repo-relative path only.",
+  "expect": "pydoc.py",
+  "verify": "writedocs",
+  "original": "Write out HTML documentation for all modules in a directory tree."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Eject the least entry, then push the incoming element in.\"? Reply with the repo-relative path only.",
+  "expect": "heapq.py",
+  "verify": "heapreplace",
+  "original": "Pop and return the current smallest value, and add the new item."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Loop over each element provided, join them with a delimiter, and tack the result onto the end of a target.\"? Reply with the repo-relative path only.",
+  "expect": "ast.py",
+  "verify": "items_view",
+  "original": "Traverse and separate the given *items* with a comma and append it to"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Domain presently assigned for SNI purposes, or None if nothing is assigned.\"? Reply with the repo-relative path only.",
+  "expect": "ssl.py",
+  "verify": "server_hostname",
+  "original": "The currently set server hostname (for SNI), or ``None`` if no"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Foundational template, not directly instantiable, for error objects raised by the browser's document model.\"? Reply with the repo-relative path only.",
+  "expect": "xml/dom/__init__.py",
+  "verify": "DOMException",
+  "original": "Abstract base class for DOM exceptions."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Shared parent type underlying every contract that defines a communication standard.\"? Reply with the repo-relative path only.",
+  "expect": "asyncio/protocols.py",
+  "verify": "BaseProtocol",
+  "original": "Common base class for protocol interfaces."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Create a fresh path instance by joining however many path-like inputs are given.\"? Reply with the repo-relative path only.",
+  "expect": "pathlib.py",
+  "verify": "with_segments",
+  "original": "Construct a new path object from any number of path-like objects."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Ask the user to type a secret while keeping the typed characters hidden from the screen.\"? Reply with the repo-relative path only.",
+  "expect": "getpass.py",
+  "verify": "unix_getpass",
+  "original": "Prompt for a password, with echo turned off."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Blueprint holding properties that record details of every entry inside a compressed bundle.\"? Reply with the repo-relative path only.",
+  "expect": "zipfile/__init__.py",
+  "verify": "ZipInfo",
+  "original": "Class with attributes describing each file in the ZIP archive."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Mirrors the sync coordinator, but it runs over the local IPC segment rather than the networked host.\"? Reply with the repo-relative path only.",
+  "expect": "multiprocessing/managers.py",
+  "verify": "SharedMemoryManager",
+  "original": "Like SyncManager but uses SharedMemoryServer instead of Server."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Register an extra folder that the loader consults when locating libraries.\"? Reply with the repo-relative path only.",
+  "expect": "os.py",
+  "verify": "add_dll_directory",
+  "original": "Add a path to the DLL search path."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Build a calendar date from the ISO year, the week index inside it, and the day within that week.\"? Reply with the repo-relative path only.",
+  "expect": "_pydatetime.py",
+  "verify": "fromisocalendar",
+  "original": "Construct a date from the ISO year, week number and weekday."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"One element of a string body: either a printable character other than the enclosing quote and backslash, or a backslash-escaped pair.\"? Reply with the repo-relative path only.",
+  "expect": "email/_header_value_parser.py",
+  "verify": "get_qcontent",
+  "original": "qcontent = qtext / quoted-pair"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Keep reading flags that come after positional arguments rather than halting at the earliest one.\"? Reply with the repo-relative path only.",
+  "expect": "optparse.py",
+  "verify": "enable_interspersed_args",
+  "original": "Set parsing to not stop on the first non-option, allowing"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Encloses failures that may not serialize, so they can be\"? Reply with the repo-relative path only.",
+  "expect": "multiprocessing/pool.py",
+  "verify": "MaybeEncodingError",
+  "original": "Wraps possible unpickleable errors, so they can be"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Turn raw text into an email-style record with headers and body.\"? Reply with the repo-relative path only.",
+  "expect": "email/__init__.py",
+  "verify": "message_from_string",
+  "original": "Parse a string into a Message object model."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Insert a fresh item into the backlog at a fixed moment in time.\"? Reply with the repo-relative path only.",
+  "expect": "sched.py",
+  "verify": "enterabs",
+  "original": "Enter a new event in the queue at an absolute time."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Gives back the content of the field whose key equals the supplied name.\"? Reply with the repo-relative path only.",
+  "expect": "http/client.py",
+  "verify": "getheader",
+  "original": "Returns the value of the header matching *name*."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Support routine for interpreting pause and reset directives; subclasses can supply their own version.\"? Reply with the repo-relative path only.",
+  "expect": "pdb.py",
+  "verify": "lookupmodule",
+  "original": "Helper function for break/clear parsing -- may be overridden."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Pow of 0 set to meet the caps.\"? Reply with the repo-relative path only.",
+  "expect": "_pydecimal.py",
+  "verify": "Clamped",
+  "original": "Exponent of a 0 changed to fit bounds."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Turn the supplied location into a text value when it isn't one yet.\"? Reply with the repo-relative path only.",
+  "expect": "importlib/resources/_legacy.py",
+  "verify": "normalize_path",
+  "original": "Normalize a path by ensuring it is a string."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Contrast the shared entries present in a pair of folders.\"? Reply with the repo-relative path only.",
+  "expect": "filecmp.py",
+  "verify": "cmpfiles",
+  "original": "Compare common files in two directories."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"An opening marker exists, yet its matching ending marker is missing.\"? Reply with the repo-relative path only.",
+  "expect": "email/errors.py",
+  "verify": "CloseBoundaryNotFoundDefect",
+  "original": "A start boundary was found, but not the corresponding close boundary."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Take a .pyc location and yield the corresponding .py location.\"? Reply with the repo-relative path only.",
+  "expect": "importlib/_bootstrap_external.py",
+  "verify": "source_from_cache",
+  "original": "Given the path to a .pyc. file, return the path to its .py file."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Foundation template for text analyzers, offering shared helper routines\"? Reply with the repo-relative path only.",
+  "expect": "_markupbase.py",
+  "verify": "ParserBase",
+  "original": "Parser base class which provides some common support methods used"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Base template for observing spawned sub-programs.\"? Reply with the repo-relative path only.",
+  "expect": "asyncio/unix_events.py",
+  "verify": "AbstractChildWatcher",
+  "original": "Abstract base class for monitoring child processes."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"This type supplies a universal routine for ranking two ordered groups of values against each other, element by element.\"? Reply with the repo-relative path only.",
+  "expect": "pstats.py",
+  "verify": "TupleComp",
+  "original": "This class provides a generic function for comparing any two tuples."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Retrieve the text rows of a Py script from the stored copy.\"? Reply with the repo-relative path only.",
+  "expect": "linecache.py",
+  "verify": "getlines",
+  "original": "Get the lines for a Python source file from the cache."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Take one away from the job's sum of stop-petitions.\"? Reply with the repo-relative path only.",
+  "expect": "asyncio/tasks.py",
+  "verify": "uncancel",
+  "original": "Decrement the task's count of cancellation requests."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Control for modifying text, operating on a pane's inner content area.\"? Reply with the repo-relative path only.",
+  "expect": "curses/textpad.py",
+  "verify": "Textbox",
+  "original": "Editing widget using the interior of a window object."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Callback run a single time just before the command interpreter loop starts.\"? Reply with the repo-relative path only.",
+  "expect": "cmd.py",
+  "verify": "postloop",
+  "original": "Hook method executed once when the cmdloop() method is about to"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"A lean run with no prep or data held over each set or file.\"? Reply with the repo-relative path only.",
+  "expect": "unittest/suite.py",
+  "verify": "BaseTestSuite",
+  "original": "A simple test suite that doesn't provide class or module shared fixtures."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Template parent type offering groundwork for constructing a fold operator.\"? Reply with the repo-relative path only.",
+  "expect": "multiprocessing/reduction.py",
+  "verify": "AbstractReducer",
+  "original": "Abstract base class for use in implementing a Reduction class"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Produce the present day and clock reading, shaped for a letter's top line.\"? Reply with the repo-relative path only.",
+  "expect": "http/server.py",
+  "verify": "date_time_string",
+  "original": "Return the current date and time formatted for a message header."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Give back a file's inode-status timestamp as surfaced by os.stat().\"? Reply with the repo-relative path only.",
+  "expect": "genericpath.py",
+  "verify": "getctime",
+  "original": "Return the metadata change time of a file, reported by os.stat()."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Convert an address-header fragment into an ordered collection of its word-or-quoted-string groupings under RFC 2822.\"? Reply with the repo-relative path only.",
+  "expect": "email/_parseaddr.py",
+  "verify": "getphraselist",
+  "original": "Parse a sequence of RFC 2822 phrases."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Shared utilities for transformer-type variants, supplied by this reusable base component.\"? Reply with the repo-relative path only.",
+  "expect": "logging/config.py",
+  "verify": "ConvertingMixin",
+  "original": "For ConvertingXXX's, this mixin class provides common functions"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Records the outcomes of a check run and can write a neatly styled summary to a given output channel.\"? Reply with the repo-relative path only.",
+  "expect": "unittest/runner.py",
+  "verify": "TextTestResult",
+  "original": "A test result class that can print formatted text results to a stream."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Produce a JSON-encoded form of a text value in which every non-7-bit character is escaped.\"? Reply with the repo-relative path only.",
+  "expect": "json/encoder.py",
+  "verify": "py_encode_basestring_ascii",
+  "original": "Return an ASCII-only JSON representation of a Python string"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Signals a fault when a stored byte sequence cannot be rebuilt into its original Python value.\"? Reply with the repo-relative path only.",
+  "expect": "pickle.py",
+  "verify": "UnpicklingError",
+  "original": "This exception is raised when there is a problem unpickling an object,"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Invoked once a test ends, whatever the result.\"? Reply with the repo-relative path only.",
+  "expect": "unittest/result.py",
+  "verify": "addDuration",
+  "original": "Called when a test finished to run, regardless of its outcome."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Reverse the base-85 transform applied to input b, which may arrive as a buffer-like run of raw values or as a text run of characters.\"? Reply with the repo-relative path only.",
+  "expect": "base64.py",
+  "verify": "a85decode",
+  "original": "Decode the Ascii85 encoded bytes-like object or ASCII string b."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Walk each segment and yield text content a line at a time.\"? Reply with the repo-relative path only.",
+  "expect": "email/iterators.py",
+  "verify": "body_line_iterator",
+  "original": "Iterate over the parts, returning string payloads line-by-line."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Pick the best MIME part to show as the main text of a mail item.\"? Reply with the repo-relative path only.",
+  "expect": "email/message.py",
+  "verify": "get_body",
+  "original": "Return best candidate mime part for display as 'body' of message."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Mirrors the ordered-array subtraction routine in every respect but\"? Reply with the repo-relative path only.",
+  "expect": "unittest/util.py",
+  "verify": "unorderable_list_difference",
+  "original": "Same behavior as sorted_list_difference but"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Supply Linux distro details parsed from the common standard text file kept under /etc.\"? Reply with the repo-relative path only.",
+  "expect": "platform.py",
+  "verify": "freedesktop_os_release",
+  "original": "Return operation system identification from freedesktop.org os-release"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Deadline guard for a with-block that aborts awaitable jobs running past their limit.\"? Reply with the repo-relative path only.",
+  "expect": "asyncio/timeouts.py",
+  "verify": "Timeout",
+  "original": "Asynchronous context manager for cancelling overdue coroutines."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Notice emitted when a bad location is set via the environment variable for timezone data lookup.\"? Reply with the repo-relative path only.",
+  "expect": "zoneinfo/_tzpath.py",
+  "verify": "InvalidTZPathWarning",
+  "original": "Warning raised if an invalid path is specified in PYTHONTZPATH."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Tweak the Py compile-step option values.\"? Reply with the repo-relative path only.",
+  "expect": "_osx_support.py",
+  "verify": "customize_config_vars",
+  "original": "Customize Python build configuration variables."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Rebuild a link string from its split parts, which can yield a slightly different but equivalent address.\"? Reply with the repo-relative path only.",
+  "expect": "urllib/parse.py",
+  "verify": "urlunparse",
+  "original": "Put a parsed URL back together again.  This may result in a"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Examine one statement of source code in a particular scripting language and fetch the current contents of each identifier it references.\"? Reply with the repo-relative path only.",
+  "expect": "cgitb.py",
+  "verify": "scanvars",
+  "original": "Scan one logical line of Python and look up values of variables used."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Produces text by applying printf-style substitution, just as the percent operator does.\"? Reply with the repo-relative path only.",
+  "expect": "locale.py",
+  "verify": "format_string",
+  "original": "Formats a string in the same way that the % formatting would use,"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Blueprint for an object that listens for incoming connections on a pipe.\"? Reply with the repo-relative path only.",
+  "expect": "asyncio/windows_events.py",
+  "verify": "PipeServer",
+  "original": "Class representing a pipe server."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Attempt to test the regex against the whole text, yielding a result object or nothing when no hit occurred.\"? Reply with the repo-relative path only.",
+  "expect": "re/__init__.py",
+  "verify": "fullmatch",
+  "original": "Try to apply the pattern to all of the string, returning"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Set up reducers so that link and endpoint objects can be serialized and passed between processes\"? Reply with the repo-relative path only.",
+  "expect": "multiprocessing/context.py",
+  "verify": "allow_connection_pickling",
+  "original": "Install support for sending connections and sockets"
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Thrown when the bytes fetched differ from the byte count the server advertised.\"? Reply with the repo-relative path only.",
+  "expect": "urllib/error.py",
+  "verify": "ContentTooShortError",
+  "original": "Exception raised when downloaded size does not match content-length."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Base type from which every Unix web client offering external control inherits.\"? Reply with the repo-relative path only.",
+  "expect": "webbrowser.py",
+  "verify": "UnixBrowser",
+  "original": "Parent class for all Unix browsers with remote functionality."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Retrieve all objects of the statistical model class that exist in the present runtime context.\"? Reply with the repo-relative path only.",
+  "expect": "importlib/metadata/__init__.py",
+  "verify": "distributions",
+  "original": "Get all ``Distribution`` instances in the current environment."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Produce a mapping keyed by name holding every callable and type defined in the given package.\"? Reply with the repo-relative path only.",
+  "expect": "pyclbr.py",
+  "verify": "readmodule_ex",
+  "original": "Return a dictionary with all functions and classes in module."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Ask the zygote to fork a kid proc.\"? Reply with the repo-relative path only.",
+  "expect": "multiprocessing/forkserver.py",
+  "verify": "connect_to_new_process",
+  "original": "Request forkserver to create a child process."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Breaks down a MIME-style field into its media kind and its parameters.\"? Reply with the repo-relative path only.",
+  "expect": "cgi.py",
+  "verify": "parse_header",
+  "original": "Parse a Content-type like header."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Condense the supplied string and cut it so it occupies no more than the specified number of columns.\"? Reply with the repo-relative path only.",
+  "expect": "textwrap.py",
+  "verify": "shorten",
+  "original": "Collapse and truncate the given text to fit in the given width."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Supply an access window over the data store that supports both reading and modifying.\"? Reply with the repo-relative path only.",
+  "expect": "_pyio.py",
+  "verify": "getbuffer",
+  "original": "Return a readable and writable view of the buffer."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Give back the link to pull the specified item from.\"? Reply with the repo-relative path only.",
+  "expect": "multiprocessing/resource_sharer.py",
+  "verify": "get_connection",
+  "original": "Return connection from which to receive identified resource."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Parse a JSON payload from the string s (a str opening with\"? Reply with the repo-relative path only.",
+  "expect": "json/decoder.py",
+  "verify": "raw_decode",
+  "original": "Decode a JSON document from ``s`` (a ``str`` beginning with"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Printable-text function that copes with self-referencing containers, unlike plain representation.\"? Reply with the repo-relative path only.",
+  "expect": "pprint.py",
+  "verify": "saferepr",
+  "original": "Version of repr() which can handle recursive data structures."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Supplies the ABC credential presently held in storage.\"? Reply with the repo-relative path only.",
+  "expect": "_py_abc.py",
+  "verify": "get_cache_token",
+  "original": "Returns the current ABC cache token."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"A set whose members may be altered, holding a bounded number of items that can be walked through one by one.\"? Reply with the repo-relative path only.",
+  "expect": "_collections_abc.py",
+  "verify": "MutableSet",
+  "original": "A mutable set is a finite, iterable container."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Compute a checksum over the bytes read from a stream-style handle and give back a result value.\"? Reply with the repo-relative path only.",
+  "expect": "hashlib.py",
+  "verify": "file_digest",
+  "original": "Hash the contents of a file-like object. Returns a digest object."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Enumerate every instruction within a serialized Python object stream.\"? Reply with the repo-relative path only.",
+  "expect": "pickletools.py",
+  "verify": "genops",
+  "original": "Generate all the opcodes in a pickle."
+ },
+ {
+  "q": "Which file defines the Python class documented as: \"Produces a plain-text rendering of a note.\"? Reply with the repo-relative path only.",
+  "expect": "email/generator.py",
+  "verify": "DecodedGenerator",
+  "original": "Generates a text representation of a message."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Locate the corresponding rule for a media-type handler definition.\"? Reply with the repo-relative path only.",
+  "expect": "mailcap.py",
+  "verify": "findmatch",
+  "original": "Find a match for a mailcap entry."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Collect every example-check from the supplied file, packaging them together into a group object.\"? Reply with the repo-relative path only.",
+  "expect": "unittest/loader.py",
+  "verify": "loadTestsFromModule",
+  "original": "Return a suite of all test cases contained in the given module"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Faster-scaling alternative routine that turns base-ten digit text into a machine integer.\"? Reply with the repo-relative path only.",
+  "expect": "_pylong.py",
+  "verify": "str_to_int",
+  "original": "Asymptotically fast version of decimal string to 'int' conversion."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Register a fresh record in the parts registry, then mark that part as the active one for the session.\"? Reply with the repo-relative path only.",
+  "expect": "msilib/__init__.py",
+  "verify": "start_component",
+  "original": "Add an entry to the Component table, and make this component the current for this"
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Yields the arrival time of a note as a count of whole secs from 1970-01-01 UTC.\"? Reply with the repo-relative path only.",
+  "expect": "mailbox.py",
+  "verify": "get_date",
+  "original": "Return delivery date of message, in seconds since the epoch."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Return the machine's MAC as a whole number of 48 bits, above zero.\"? Reply with the repo-relative path only.",
+  "expect": "uuid.py",
+  "verify": "getnode",
+  "original": "Get the hardware address as a 48-bit positive integer."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Assemble a fetcher instance from a sequence of processors.\"? Reply with the repo-relative path only.",
+  "expect": "urllib/request.py",
+  "verify": "build_opener",
+  "original": "Create an opener object from a list of handlers."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Checks the incoming inquiry; subclasses may swap this out.\"? Reply with the repo-relative path only.",
+  "expect": "socketserver.py",
+  "verify": "verify_request",
+  "original": "Verify the request.  May be overridden."
+ },
+ {
+  "q": "Which file defines the Python function documented as: \"Return the feature set the remote peer advertised, as captured by the constructor.\"? Reply with the repo-relative path only.",
+  "expect": "nntplib.py",
+  "verify": "getcapabilities",
+  "original": "Get the server capabilities, as read by __init__()."
+ }
+]

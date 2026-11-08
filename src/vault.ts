@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import { documentDir, join } from '@tauri-apps/api/path'
+import { listen } from '@tauri-apps/api/event'
 import { open } from '@tauri-apps/plugin-dialog'
 import type { Note } from './deso'
 import { welcomeNote } from './welcome'
@@ -73,9 +74,15 @@ export async function deleteNote(name: string, rest: Note[]) {
 }
 
 export type Answer = { text: string; input: number; cached: number; output: number; cost: number }
-export type AgentOpts = { session?: string; resume?: boolean; tools?: string; system?: string; budget?: number }
+export type AgentOpts = { session?: string; resume?: boolean; tools?: string; system?: string; budget?: number; worktree?: string }
 export const runAgent = (cli: string, prompt: string, model: string, effort: string, opts: AgentOpts = {}) => call<Answer>('run_agent', { cli, prompt, model, effort, ...opts })
 export const runAgentCli = (cli: string, prompt: string, model: string, effort: string) => runAgent(cli, prompt, model, effort).then((a) => a.text)
+// Isolated runs: agents work in a git worktree (id = the orchestra id) until you apply or discard what they changed.
+export const worktreeStamp = (worktree?: string) => call<string>('project_stamp', { worktree })
+export const worktreeCreate = (id: string) => call<string>('worktree_create', { id })
+export const worktreeDiff = (id: string) => call<string>('worktree_diff', { id })
+export const worktreeApply = (id: string) => call<boolean>('worktree_apply', { id })
+export const worktreeDiscard = (id: string) => call<void>('worktree_discard', { id })
 export const stopAgents = () => call<void>('stop_agents')
 export const openRoot = () => call<void>('open_root')
 export const claudeUsage = () => call<string>('claude_usage')
@@ -106,6 +113,10 @@ export function removeProject(id: string) {
   saveList(listProjects().filter((p) => p !== id))
   if (!inTauri) localStorage.removeItem(store(id))
 }
+
+/** Desktop only: watch the open project; when its files change the graph is re-scanned (only changes written) and `cb` is called. */
+export const watchProject = () => (inTauri ? call<void>('watch_project') : Promise.resolve())
+export const onGraphChanged = (cb: () => void) => (inTauri ? listen('graph-changed', cb) : Promise.resolve(() => {}))
 
 /** Desktop only: regenerate the scanned part of the graph; hand-written notes are kept. */
 export const rescanProject = () => call<number>('index_project', { force: true })

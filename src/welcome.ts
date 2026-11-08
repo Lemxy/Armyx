@@ -27,9 +27,11 @@ const ru = `# welcome
 Откройте папку с кодом как проект: файлы станут заметками, импорты — связями, а заметка project-map даст обзор. Ваши заметки сохраняются при повторном сканировании (кнопка обновления внизу боковой панели).
 
 ## 5. Оркестр
-Вкладка «Оркестр»: правая кнопка по холсту добавляет модели (Claude или Antigravity) и блок правил. Потяните за точку справа у блока и отпустите над другим, чтобы связать.
+Вкладка «Оркестр»: правая кнопка по холсту добавляет модели (Claude, Antigravity или DeepSeek) и блок правил. Потяните за точку справа у блока и отпустите над другим, чтобы связать.
 Блок «Старт» — ведущий: только он получает карту и раздаёт задания агентам A, B, C… по связям. Писать можно ведущему (он снова раздаст задания всем) или отдельному агенту.
 Панель справа показывает диалог агентов и кто чем занят; история сохраняется.
+Когда агенты ответили, ведущий читает их отчёты и пишет итоговый ответ.
+Изоляция (включена по умолчанию): агенты работают в отдельном git worktree, ваш проект не затрагивается. «Изменения» показывает, что они сделали, «Применить» переносит это в проект (без коммита), «Отбросить» удаляет.
 
 Ctrl+J открывает и закрывает чат с агентом.
 `
@@ -61,9 +63,11 @@ The agent in the right panel always sees the map and asks for a specific file wh
 Open a code folder as a project: files become notes, imports become links, and a project-map note gives the overview. Your own notes survive a rescan (the refresh button at the bottom of the sidebar).
 
 ## 5. Orchestra
-The Orchestra tab: right-click the canvas to add models (Claude or Antigravity) and a rules block. Drag from the dot on the right of a block and release over another one to link them.
+The Orchestra tab: right-click the canvas to add models (Claude, Antigravity or DeepSeek) and a rules block. Drag from the dot on the right of a block and release over another one to link them.
 The Start block is the lead: only it gets the map and briefs agents A, B, C… along the links. You can write to the lead (it briefs everyone again) or to a single agent.
 The right panel shows the agents' dialogue and who is doing what; the history is saved.
+When the agents have answered, the lead reads their reports and writes the final answer.
+Isolate (on by default): the agents work in a separate git worktree, so your project stays untouched. Changes shows what they did, Apply brings it into your project (not committed), Discard throws it away.
 
 Ctrl+J opens and closes the agent chat.
 `

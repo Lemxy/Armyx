@@ -57,6 +57,13 @@ modes['lean'] = { sys: SYS(v2, v2.graphMap(notes, 2500)), user: modes['map-v3'].
 const hook = fileURLToPath(new URL('../mcp/claude-hook.mjs', import.meta.url)).replaceAll('\\', '/')
 const hookCmd = (mode) => ({ hooks: [{ type: 'command', command: `node --experimental-strip-types --no-warnings "${hook}" "${graph.replaceAll('\\', '/')}" ${mode}` }] })
 modes.hook = { extra: ['--settings', tmpFile('armyx-hook-settings.json', JSON.stringify({ hooks: { SessionStart: [hookCmd('session')], UserPromptSubmit: [hookCmd('prompt')] } })), '--strict-mcp-config', '--mcp-config', noMcp], user: (q) => q }
+// the product path since the hook moved into the app: `deso-vault --armyx-hook` (Rust). hook-rs reads GRAPH_NOSEM (a graph dir without
+// embeddings.bin: words only), hook-rs-sem reads the graph dir argument (with the vectors: semantic search on). ARMYX_EXE points at the app.
+const exe = (process.env.ARMYX_EXE ?? fileURLToPath(new URL('../src-tauri/target/release/deso-vault.exe', import.meta.url))).replaceAll('\\', '/')
+const rsCmd = (dir, mode) => ({ hooks: [{ type: 'command', command: `"${exe}" --armyx-hook "${dir.replaceAll('\\', '/')}" ${mode}` }] })
+const rsMode = (name, dir) => ({ extra: ['--settings', tmpFile(`armyx-${name}-settings.json`, JSON.stringify({ hooks: { SessionStart: [rsCmd(dir, 'session')], UserPromptSubmit: [rsCmd(dir, 'prompt')] } })), '--strict-mcp-config', '--mcp-config', noMcp], user: (q) => q })
+if (process.env.GRAPH_NOSEM) modes['hook-rs'] = rsMode('hook-rs', process.env.GRAPH_NOSEM)
+modes['hook-rs-sem'] = rsMode('hook-rs-sem', graph)
 if (process.env.OLD_DESO) {
   const v1 = await import(pathToFileURL(process.env.OLD_DESO).href)
   const map = v1.graphMap(notesOf(process.env.OLD_GRAPH))

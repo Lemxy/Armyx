@@ -13,5 +13,9 @@
     "windows": [{ "title": "Taurium", "width": 1400, "height": 900 }],
     "security": { "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost https://api.anthropic.com https://generativelanguage.googleapis.com https://api.deepseek.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:" }
   },
-  "bundle": { "active": false }
+  "bundle": {
+    "active": true,
+    "targets": ["nsis", "deb", "dmg"],
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"]
+  }
 }

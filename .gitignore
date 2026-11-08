@@ -7,9 +7,9 @@ src-tauri/gen/
 tsconfig.tsbuildinfo
 
 # private project (NovaFull): questions and raw answers name internal files
-bench/results*.json
-bench/questions.novafull*.json
-bench/edit-tasks.novafull*.json
+archive/map-bench/results*.json
+archive/map-bench/questions.novafull*.json
+archive/map-bench/edit-tasks.novafull*.json
 
 .claude/settings.local.json
 .tools/

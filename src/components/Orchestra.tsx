@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowUp, FolderOpen, Play, Plus, Square, Trash2, X } from 'lucide-react'
+import { ArrowUp, FolderOpen, GitBranch, Play, Plus, Square, Trash2, X } from 'lucide-react'
 import { useI18n } from '../i18n'
-import { agyModels, inTauri, openRoot, runAgent, stopAgents, type Answer } from '../vault'
+import { agyModels, inTauri, openRoot, runAgent, stopAgents, worktreeApply, worktreeCreate, worktreeDiff, worktreeDiscard, worktreeStamp, type Answer } from '../vault'
 import Markdown from './Markdown'
 import { MODELS } from './AgentSidebar'
 import { graphMap, MAP_INTRO, tokens, type Note } from '../deso'
@@ -31,6 +31,7 @@ type Node = {
   text: string; notes: string[] // text = context for a model block, the rules themselves for a rules block; notes = embedded note names
   out?: string; img?: string; state?: 'run' | 'ok' | 'err'
   sid?: string; mapSum?: number // claude session continued with --resume, so the dialogue isn't resent; mapSum = hash of the map that session last saw
+  final?: string; finalSum?: number // lead only: its answer after the agents reported back, and the hash of the reports it was written from
   sum?: number; use?: Use // sum = hash of what the block was last run with: unchanged → its answer is reused; use = tokens of the last call
 }
 type Use = Omit<Answer, 'text'> & { same?: boolean }
@@ -39,7 +40,7 @@ type Opts = { keep?: boolean; tools?: string; effort?: string; mapSum?: number }
 // `usage` = the table of who spent what, posted after every run or answer (rows; no ids, so it never enters an agent's dialogue).
 type Entry = { from: string; to: string; text: string; kind: 'task' | 'reply' | 'error' | 'user' | 'run' | 'usage'; at: number; toId?: string; fromId?: string; quiet?: boolean; rows?: Row[]; img?: string }
 type Row = { who: string; use: Use }
-type Orch = { id: string; name: string; task: string; nodes: Node[]; edges: [string, string][]; log?: Entry[]; queue?: boolean } // queue: one block at a time; default: blocks run as soon as their inputs are ready, in parallel
+type Orch = { id: string; name: string; task: string; nodes: Node[]; edges: [string, string][]; log?: Entry[]; queue?: boolean; iso?: boolean; wt?: boolean } // iso: agents work in a git worktree, wt: that worktree exists and holds changes to review; queue: one block at a time; default: blocks run as soon as their inputs are ready, in parallel
 const LOG_MAX = 200
 const INPUT_MAX = 12000, NOTE_MAX = 6000 // chars: a longer handoff is cut; a longer embedded note is passed as a file to read
 const BUDGET = 3 // USD cap per call (claude --max-budget-usd): stops a runaway agent, not normal work
@@ -52,9 +53,29 @@ const clip = (s: string) => (s.length > INPUT_MAX ? `${s.slice(0, INPUT_MAX)}\n�
 const k = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`)
 
 const W = 272, HEAD = 20 // node width; y of the link handles, measured from the node's top
-const hash = (s: string) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return h }
+// cyrb53: 53 bits, so two different inputs colliding (and a stale answer being reused) is out of the question in practice
+const hash = (s: string) => {
+  let a = 0xdeadbeef, b = 0x41c6ce57
+  for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); a = Math.imul(a ^ c, 2654435761); b = Math.imul(b ^ c, 1597334677) }
+  a = Math.imul(a ^ (a >>> 16), 2246822507) ^ Math.imul(b ^ (b >>> 13), 3266489909)
+  b = Math.imul(b ^ (b >>> 16), 2246822507) ^ Math.imul(a ^ (a >>> 13), 3266489909)
+  return 4294967296 * (2097151 & b) + (a >>> 0)
+}
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+const TRANSIENT = /overload|rate.?limit|too many|429|50\d|timed? ?out|econn|network|temporar|unavailable/i // worth another try; a bad key or model is not
+const RETRIES = 2
+const retry = async <T,>(fn: () => Promise<T>, stop: () => boolean): Promise<T> => {
+  for (let tries = 0; ; tries++) {
+    try { return await fn() } catch (e) {
+      if (tries >= RETRIES || stop() || !TRANSIENT.test(String(e))) throw e
+      await sleep(2000 * 2 ** tries)
+      if (stop()) throw e
+    }
+  }
+}
+const RUN_CAP = 10 // USD per run: no new block starts after this (a running one is still bound by BUDGET). Only Claude reports cost.
 const uid = () => Math.random().toString(36).slice(2, 9)
-const fresh = (n: number): Orch => ({ id: uid(), name: `Orchestra ${n}`, task: '', nodes: [], edges: [] })
+const fresh = (n: number): Orch => ({ id: uid(), name: `Orchestra ${n}`, task: '', nodes: [], edges: [], iso: inTauri })
 // Older saves may hold more than one start block; keep the first.
 const dedupe = (o: Orch): Orch => { const keep = o.nodes.filter((n, i) => n.kind !== 'start' || i === o.nodes.findIndex((x) => x.kind === 'start')); return { ...o, nodes: keep, edges: o.edges.filter((e) => e.every((id) => keep.some((n) => n.id === id))) } }
 const load = (k: string): Orch[] => { try { const v = JSON.parse(localStorage.getItem(k) ?? ''); if (v.length) return (v as Orch[]).map((o) => dedupe({ ...o, nodes: o.nodes.map((n) => (n.state === 'run' ? { ...n, state: undefined } : n)) })) } catch { /* first run */ } return [fresh(1)] }
@@ -150,10 +171,29 @@ export default function Orchestra({ notes, project, onMenu }: { notes: Note[]; p
     el.onpointerup = () => { el.onpointermove = null; el.onpointerup = null }
   }
 
+  // Isolated: every agent works in the orchestra's git worktree. A failure stops the run: never fall back to the real project.
+  const isolate = async () => {
+    if (!o.iso || !inTauri) return true
+    try { await worktreeCreate(o.id); if (!o.wt) upd((c) => ({ ...c, wt: true })); return true }
+    catch (e) { addLog({ from: 'git', to: '', text: `${t('orchIsoFail')}
+${String(e)}`, kind: 'error' }); return false }
+  }
+  const review = async (what: 'diff' | 'apply' | 'discard') => {
+    try {
+      if (what === 'diff') { const d = await worktreeDiff(o.id); addLog({ from: 'git', to: '', kind: 'reply', text: d.trim() ? `\`\`\`diff
+${clip(d)}
+\`\`\`` : t('orchNoChanges') }); return }
+      if (what === 'discard' && !window.confirm(t('orchDiscardAsk'))) return
+      const changed = what === 'apply' ? await worktreeApply(o.id) : (await worktreeDiscard(o.id), false)
+      upd((c) => ({ ...c, wt: false, nodes: c.nodes.map((n) => ({ ...n, sid: undefined, sum: undefined })) })) // sessions and cached answers belonged to the worktree
+      addLog({ from: 'git', to: '', kind: 'reply', text: what === 'apply' ? t(changed ? 'orchApplied' : 'orchNoChanges') : t('orchDiscarded') })
+    } catch (e) { addLog({ from: 'git', to: '', text: String(e), kind: 'error' }) }
+  }
+
   // `msg` = something you wrote to the lead: the lead takes it as a new instruction and briefs every agent again.
   // force (Shift+click on Run): rerun every block, even one whose input has not changed.
   const run = async (msg?: string, force = false) => {
-    if (running) return
+    if (running || !(await isolate())) return
     stopped.current = false
     const prev = new Map(o.nodes.map((n) => [n.id, n]))
     const agents = o.nodes.filter((n) => n.kind !== 'rules') // the lead (start) and the model blocks
@@ -171,7 +211,7 @@ export default function Orchestra({ notes, project, onMenu }: { notes: Note[]; p
     const lead = o.nodes.find((n) => n.kind === 'start')!
     if (msg) addLog({ from: t('orchUser'), to: who(lead), toId: lead.id, text: msg, kind: 'user' })
     try {
-    upd((c) => ({ ...c, nodes: c.nodes.map((n) => ({ ...n, out: undefined, state: undefined, use: undefined, img: undefined, sid: n.kind === 'start' ? n.sid : undefined })) })) // a worker's chat session restarts from the log after each run
+    upd((c) => ({ ...c, nodes: c.nodes.map((n) => ({ ...n, out: undefined, final: undefined, state: undefined, use: undefined, img: undefined, sid: n.kind === 'start' ? n.sid : undefined })) })) // a worker's chat session restarts from the log after each run
     const outs = new Map<string, string>()
     // The lead answers with "### A" … sections; each agent receives only its own section (whole answer if the lead skipped it).
     const section = (leadOut: string, id: string) => {
@@ -179,10 +219,11 @@ export default function Orchestra({ notes, project, onMenu }: { notes: Note[]; p
       for (let i = 1; i < parts.length; i += 2) if (parts[i] === tag(id)) return parts[i + 1].trim()
       return leadOut
     }
-    let failed = false
+    let failed = false, capped = false
     const rows: Row[] = [] // filled as blocks finish; posted as one table when the run ends
     const step = async (n: Node) => {
       if (failed || stopped.current) return
+      if (rows.reduce((a, r) => a + r.use.cost, 0) >= RUN_CAP) { if (!capped) { capped = true; addLog({ from: '', to: '', kind: 'error', text: t('orchCap', { n: RUN_CAP }) }) } return }
       const from = o.edges.filter((e) => e[1] === n.id).map((e) => byId.get(e[0])!)
       const rules = from.filter((f) => f.kind === 'rules').map((f) => f.text).join('\n')
       const inputs = from.filter((f) => f.kind !== 'rules').map((f) => `## ${f.kind === 'start' ? 'Lead' : label(f)}\n${f.kind === 'start' ? section(outs.get(f.id) ?? '', n.id) : clip(outs.get(f.id) ?? '')}`).join('\n\n')
@@ -207,7 +248,9 @@ export default function Orchestra({ notes, project, onMenu }: { notes: Note[]; p
         key = build(false)
         opts = { effort: n.effort }
       }
-      const sum = hash([n.agent ?? 'claude', n.model, n.effort, key].join('\0')), old = prev.get(n.id)
+      // blocks that can read the project also depend on its state: after the code changed their old answer is stale
+      const stamp = inTauri && n.agent !== 'deepseek' && n.agent !== 'nano' ? await worktreeStamp(o.iso ? o.id : undefined).catch(() => '') : ''
+      const sum = hash([n.agent ?? 'claude', n.model, n.effort, o.iso, stamp, key].join('\0')), old = prev.get(n.id)
       if (!force && old?.state === 'ok' && old.out && old.sum === sum && (n.agent !== 'nano' || old.img)) { // same input as last time: reuse the answer, spend nothing
         outs.set(n.id, old.out); const use = { input: 0, cached: 0, output: 0, cost: 0, same: true }
         patch(n.id, { state: 'ok', out: old.out, img: old.img, sum, use }); rows.push({ who: who(n), use }); return
@@ -218,7 +261,7 @@ export default function Orchestra({ notes, project, onMenu }: { notes: Note[]; p
       if (!(n.kind === 'start' && msg)) addLog({ from: sender, to: who(n), toId: n.id, text: given, kind: 'task', quiet: from.length > 0 && from.every((f) => f.kind === 'model') }) // your message is already in the log; a model-to-model handoff is already shown as the sender's reply
       patch(n.id, { state: 'run' })
       try {
-        const { text: out, img, ...use } = await exec(n, build, opts)
+        const { text: out, img, ...use } = await retry(() => exec(n, build, opts), () => stopped.current)
         rows.push({ who: who(n), use })
         outs.set(n.id, out); patch(n.id, { state: 'ok', out, img, sum, use, ...(opts.mapSum !== undefined && { mapSum: opts.mapSum }) })
         const to = o.edges.filter((e) => e[0] === n.id).map((e) => who(byId.get(e[1])!)).join(', ') || t('orchUser')
@@ -235,6 +278,27 @@ export default function Orchestra({ notes, project, onMenu }: { notes: Note[]; p
       done.set(n.id, Promise.all(deps).then(() => step(n)))
     }
     await Promise.all(done.values())
+    // The agents report back: the lead reads what the last blocks answered and writes the final answer (once; it does not brief anyone again).
+    const sinks = order.filter((n) => n.kind === 'model' && outs.has(n.id) && !o.edges.some((e) => e[0] === n.id))
+    if (!failed && !stopped.current && sinks.length && o.edges.some((e) => e[0] === lead.id) && rows.reduce((a, r) => a + r.use.cost, 0) < RUN_CAP) {
+      const prompt = [`# Role\nYou are the lead agent of an orchestra. Your agents have reported back. Write the final answer to the task: merge their findings, say where they disagree, and what is still unknown. Do not brief anyone again.`,
+        o.task && `# Task\n${o.task}`, msg && `# Message from the user\n${msg}`, `# Reports\n${sinks.map((n) => `## ${who(n)}\n${clip(outs.get(n.id)!)}`).join('\n\n')}`].filter(Boolean).join('\n\n')
+      const fsum = hash(['final', lead.agent, lead.model, lead.effort, prompt].join('\0')), old = prev.get(lead.id)
+      const fin = `${who(lead)} · ${t('orchFinal')}`
+      try {
+        if (!force && old?.final && old.finalSum === fsum) {
+          patch(lead.id, { final: old.final, finalSum: fsum }); rows.push({ who: fin, use: { input: 0, cached: 0, output: 0, cost: 0, same: true } })
+          addLog({ from: fin, fromId: lead.id, to: t('orchUser'), text: old.final, kind: 'reply' })
+        } else {
+          patch(lead.id, { state: 'run' })
+          const { text: final, ...use } = await retry(() => exec(lead, () => prompt, { tools: '', effort: lead.effort ?? 'low' }), () => stopped.current)
+          rows.push({ who: fin, use }); patch(lead.id, { final, finalSum: fsum, state: 'ok' })
+          addLog({ from: fin, fromId: lead.id, to: t('orchUser'), text: final, kind: 'reply' })
+        }
+      } catch (e) {
+        patch(lead.id, { state: 'ok' }); addLog({ from: fin, fromId: lead.id, to: '', text: String(e instanceof Error ? e.message : e), kind: 'error' })
+      }
+    }
     if (rows.length) addLog({ from: '', to: '', text: '', kind: 'usage', rows })
     } finally { setRunning(false) }
   }
@@ -253,7 +317,7 @@ export default function Orchestra({ notes, project, onMenu }: { notes: Note[]; p
     const go = async (resumed: boolean, session?: string) => {
       const prompt = build(resumed)
       if (!prompt.trim()) throw new Error(t('orchNoInput'))
-      const a = await runAgent(cli, prompt, n.model ?? MODELS.claude[0][0], cli !== 'claude' ? '' : effort, { session, resume: resumed, tools, system: BRIEF, budget: BUDGET })
+      const a = await runAgent(cli, prompt, n.model ?? MODELS.claude[0][0], cli !== 'claude' ? '' : effort, { session, resume: resumed, tools, system: BRIEF, budget: BUDGET, worktree: o.iso ? o.id : undefined })
       return { ...a, text: a.text.trim() }
     }
     if (cli !== 'claude' || !keep) return go(false)
@@ -297,7 +361,8 @@ export default function Orchestra({ notes, project, onMenu }: { notes: Note[]; p
   const ask = async (id: string, text: string) => {
     const n = o.nodes.find((x) => x.id === id)
     if (!n || running) return
-    if (n.kind === 'start') return run(text) // the lead never just answers: it briefs everyone again
+    if (n.kind === 'start') return run(text)
+    if (!(await isolate())) return // the lead never just answers: it briefs everyone again
     setRunning(true)
     addLog({ from: t('orchUser'), to: who(n), toId: id, text, kind: 'user' })
     patch(id, { state: 'run' })
@@ -329,6 +394,8 @@ export default function Orchestra({ notes, project, onMenu }: { notes: Note[]; p
         <button title={t('orchNew')} onClick={() => { const c = fresh(orchs.length + 1); setOrchs([...orchs, c]); setAid(c.id) }} className="btn-press p-1.5 rounded-lg text-dim hover:text-fg hover:bg-panel"><Plus size={15} /></button>
         <button title={t('delete')} disabled={orchs.length < 2} onClick={() => { const rest = orchs.filter((x) => x !== o); setOrchs(rest); setAid(rest[0].id) }} className="btn-press p-1.5 rounded-lg text-dim hover:text-status-err disabled:opacity-30"><Trash2 size={15} /></button>
         <input value={o.name} onChange={(e) => upd((c) => ({ ...c, name: e.target.value }))} placeholder={t('orchName')} className={`${field} w-44`} />
+        <button title={t('orchIsoTip')} onClick={() => upd((c) => ({ ...c, iso: !c.iso }))} disabled={running || !inTauri} className={`btn-press flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs border ${o.iso ? 'border-accent text-accent' : 'border-line text-dim'} disabled:opacity-40`}><GitBranch size={13} />{t('orchIso')}</button>
+        {o.iso && o.wt && !running && <>{(['diff', 'apply', 'discard'] as const).map((w) => <button key={w} onClick={() => review(w)} className={`btn-press px-2.5 py-1.5 rounded-lg text-xs border border-line ${w === 'discard' ? 'text-dim hover:text-status-err' : 'text-fg hover:border-accent'}`}>{t(w === 'diff' ? 'orchDiff' : w === 'apply' ? 'orchApply' : 'orchDiscard')}</button>)}</>}
         {spent.n > 0 && <span title={t('orchUseTip')} className="text-micro text-dim tabular-nums shrink-0">↑{k(spent.input)} ⟳{k(spent.cached)} ↓{k(spent.output)}{spent.cost > 0 && ` · $${spent.cost.toFixed(2)}`}</span>}
       </div>
       <div ref={canvas} onPointerDown={pan} onContextMenu={canvasMenu} className="flex-1 min-h-0 overflow-auto relative cursor-grab">
@@ -375,6 +442,7 @@ export default function Orchestra({ notes, project, onMenu }: { notes: Note[]; p
                 {n.kind === 'start' && <span className="text-micro text-dim">{t('orchMapCtx', { n: notes.length, k: mapTok })}</span>}
                 {n.use && <span title={t('orchUseTip')} className="text-micro text-dim tabular-nums">{n.use.same ? t('orchSame') : `↑${k(n.use.input)} ⟳${k(n.use.cached)} ↓${k(n.use.output)}${n.use.cost > 0 ? ` · $${n.use.cost.toFixed(3)}` : ''}`}</span>}
                 {n.kind === 'start' && n.out && <pre className={`max-h-48 overflow-auto whitespace-pre-wrap text-micro p-2 rounded-lg bg-field ${n.state === 'err' ? 'text-status-err' : 'text-mut'}`}>{n.out}</pre>}
+                {n.kind === 'start' && n.final && <pre className="max-h-48 overflow-auto whitespace-pre-wrap text-micro p-2 rounded-lg bg-accent-dim text-fg">{n.final}</pre>}
                 {n.kind === 'model' && <>
                   {n.notes.length > 0 && <div className="flex flex-wrap gap-1">{n.notes.map((x) => (
                     <button key={x} title={t('delete')} onClick={() => patch(n.id, { notes: n.notes.filter((k) => k !== x) })} className="px-2 py-0.5 rounded-full bg-accent-dim text-accent text-micro">@{x} ×</button>))}</div>}

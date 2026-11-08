@@ -1,0 +1,18 @@
+[
+  { "q": "Which file decides where each box goes on the canvas, arranging them in columns by how deep they sit in the chain?", "expect": "src/layout.ts" },
+  { "q": "Where is the code that makes a right-click list stay inside the window instead of falling off the edge?", "expect": "src/components/ContextMenu.tsx" },
+  { "q": "Which module guards the secret strings we use to call outside AI providers?", "expect": "src/keys.ts" },
+  { "q": "Which script converts skill description files into entries of the project graph?", "expect": "mcp/tools-to-notes.mjs" },
+  { "q": "Where do we list the places in the code where we knowingly cut a corner?", "expect": "mcp/debt.mjs" },
+  { "q": "Which script keeps the on-disk graph up to date after someone edits files?", "expect": "mcp/watch.mjs" },
+  { "q": "Where does the guide text for a brand new project come from?", "expect": "src/welcome.ts" },
+  { "q": "Which component renders the animated switch for picking one of a few options?", "expect": "src/components/Segmented.tsx" },
+  { "q": "Which file defines the colours and moods the application can be dressed in?", "expect": "src/index.css" },
+  { "q": "Which function roughly estimates how many words an agent would have to read?", "expect": "src/deso.ts" },
+  { "q": "Where is the small renderer for formatted answers shown in the chat panel?", "expect": "src/components/Markdown.tsx" },
+  { "q": "Which module asks several alternative chat endpoints in turn until one of them answers?", "expect": "src/deepseek.ts" },
+  { "q": "Which Rust code walks a folder of source and produces an entry for each file?", "expect": "src-tauri/src/scan.rs" },
+  { "q": "Which file lets an external agent client look up the best files over a pipe protocol?", "expect": "mcp/graph-server.mjs" },
+  { "q": "Where is the popup window wrapper that plays an exit animation before disappearing?", "expect": "src/components/Modal.tsx" },
+  { "q": "Which script puts many tool servers behind just two entry points?", "expect": "mcp/gateway.mjs" }
+]
