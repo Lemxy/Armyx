@@ -72,3 +72,9 @@ Held-out: -36% cost, -29% turns. Impact: -10% cost, recall already 1.00 for both
 Built by `npm run plugin`. With the plugin the main session sees the map and so does a subagent (`SubagentStart`); without it, no map. `/armyx:armyx status|on|off` and `/armyx:armyx-debt` work (1 turn, ~$0.003). Skills hint after the prompt filter: 12/14, ~6,360 tokens per call. `MAP_INTRO` 142 -> 102 tokens.
 
 Small project (Armyx, 78 notes, 10 q x 2, haiku): alone $0.0228 (52 turns) vs hook-delivered map $0.0302 (30 turns) vs map in the system prompt ~$0.0011 per question. A plugin can only use hooks, so on a small project its map costs more in dollars (fewer turns and seconds). Not measured: a smaller map budget for the hook.
+
+## Plain Claude Code vs Armyx (`bench/versus.mjs`, haiku; details in RESULTS-v5.ru.md)
+
+NovaFull (836 files, 30 q x 1): plain 28/30, $0.00204/q, 101 turns; armyx 30/30, $0.00141/q (-31%), 76 turns, 7.2 s vs 8.8 s per question. Armyx repo (78 files, 10 q x 2): plain 20/20 $0.00121/q; armyx 20/20 $0.00151/q (+25%, the map is delivered by hook and costs more than it saves), 32 turns vs 51, 5.4 s vs 6.9 s. Noise is about +-10-15% at this size.
+
+Correction: the "51k -> 7.6k tokens from switching off claude.ai connectors" measured earlier did not reproduce (now ~6.2k either way, the connectors are no longer connected in the CLI): it depends on the state of your account.

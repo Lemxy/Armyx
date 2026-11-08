@@ -16,7 +16,7 @@ import { MAP_INTRO, SMALL_PROJECT, graphMap, sureHits, terms, topHits } from '..
 
 const [graphArg, mode, toolsArg] = process.argv.slice(2)
 const project = process.env.CLAUDE_PROJECT_DIR || process.cwd()
-const dir = graphArg === 'auto' ? join(project, '.armyx', 'graph') : graphArg
+const dir = graphArg === 'auto' ? process.env.ARMYX_GRAPH || join(project, '.armyx', 'graph') : graphArg // ARMYX_GRAPH keeps a graph outside the project
 const toolsDir = toolsArg === 'auto' ? join(homedir(), '.armyx', 'skills') : toolsArg
 if (process.env.ARMYX === '0' || existsSync(join(project, '.armyx', 'off'))) process.exit(0)
 
