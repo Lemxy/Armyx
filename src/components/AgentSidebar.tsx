@@ -7,9 +7,9 @@ import { graphMap, MAP_INTRO, tokens, type Note } from '../deso'
 import { getKey, setKey } from '../keys'
 import { dsChat } from '../deepseek'
 import { nanoImage } from '../nano'
-import { imgId, putImg } from '../imgs'
+import { getImg, imgId, putImg } from '../imgs'
 import StoredImg from './StoredImg'
-import { agyModels, agyUsage, claudeUsage, inTauri, openRoot, runAgentCli } from '../vault'
+import { agyModels, agyUsage, claudeUsage, inTauri, openRoot, runAgentCli, saveImage } from '../vault'
 
 type Id = 'claude' | 'agy' | 'deepseek' | 'nano'
 type Mode = 'cli' | 'api'
@@ -102,7 +102,7 @@ function useTypewriter(text: string, on: boolean) {
   return { shown: text.slice(0, n), typing: n < text.length, skip: () => setN(text.length) }
 }
 
-function Assistant({ label, m, fresh, canInsert, onInsert, onTick }: { label: string; m: Msg; fresh: boolean; canInsert: boolean; onInsert: () => void; onTick: () => void }) {
+function Assistant({ label, m, fresh, canInsert, onInsert, onInsertImage, onTick }: { label: string; m: Msg; fresh: boolean; canInsert: boolean; onInsert: () => void; onInsertImage: () => void; onTick: () => void }) {
   const { t } = useI18n()
   const { shown, typing, skip } = useTypewriter(m.text, fresh && !m.error)
   const [copied, setCopied] = useState(false)
@@ -118,6 +118,7 @@ function Assistant({ label, m, fresh, canInsert, onInsert, onTick }: { label: st
           <button onClick={() => { navigator.clipboard.writeText(m.text).catch(console.error); setCopied(true); setTimeout(() => setCopied(false), 1200) }}
             className="flex items-center gap-1 px-2 py-1 rounded-md hover:text-fg hover:bg-panel">{copied ? <Check size={12} /> : <Copy size={12} />}{t('copy')}</button>
           <button onClick={onInsert} disabled={!canInsert} className="flex items-center gap-1 px-2 py-1 rounded-md hover:text-fg hover:bg-panel disabled:opacity-40"><CornerDownLeft size={12} />{t('insert')}</button>
+          {(m.img || m.imgId) && <button onClick={onInsertImage} disabled={!canInsert || !inTauri} title={inTauri ? undefined : t('desktopOnly')} className="flex items-center gap-1 px-2 py-1 rounded-md hover:text-fg hover:bg-panel disabled:opacity-40"><CornerDownLeft size={12} />{t('insertImage')}</button>}
           {m.tin != null && <span className="ml-auto">{m.tin} {t('tokIn')} · {m.tout} {t('tokOut')}</span>}
         </div>
       )}
@@ -187,7 +188,10 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
     try {
       if (!real) throw new Error(status)
       if (id === 'nano') { // a picture: the conversation so far is the prompt, no map
-        const r = await nanoImage(key, model, history.map((m) => ({ role: m.role, text: m.text })))
+        // the newest picture goes along with its turn, so "make it darker" changes that picture instead of drawing a new one
+        const last = [...history].reverse().find((m) => m.img || m.imgId)
+        const pic = last ? last.img ?? await getImg(last.imgId!).catch(() => undefined) : undefined
+        const r = await nanoImage(key, model, history.map((m) => ({ role: m.role, text: m.text, img: m === last ? pic : undefined })))
         const iid = imgId(); putImg(iid, r.img)
         reply = { role: 'assistant', text: r.text, img: r.img, imgId: iid, at: Date.now(), tin: r.input, tout: r.output }
       } else {
@@ -203,6 +207,17 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
     setFreshAt(reply.at); setBusy(false)
   }
 
+  // The picture is written next to the notes (images/<id>.png) and a Markdown link to it goes into the open note.
+  const insertImage = async (m: Msg) => {
+    try {
+      const data = m.img ?? (m.imgId ? await getImg(m.imgId) : undefined)
+      if (!data || !m.imgId) return
+      const [head, b64] = data.split(',')
+      const ext = head.includes('jpeg') ? 'jpg' : head.includes('webp') ? 'webp' : 'png'
+      const path = await saveImage(m.imgId, ext, Array.from(atob(b64), (c) => c.charCodeAt(0)))
+      onInsert(`![${m.text.slice(0, 60).replace(/\W+/g, ' ')}](${path})`)
+    } catch (e) { console.error(e) }
+  }
   const scroll = () => end.current?.scrollIntoView({ block: 'end' })
   useEffect(() => { scroll() }, [msgs.length, busy])
 
@@ -311,7 +326,7 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
             <p className="whitespace-pre-wrap px-4 py-2.5 rounded-2xl rounded-br-md bg-panel border border-line">{m.text}</p>
             <span className="text-micro text-dim">{new Date(m.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
           </div>
-          : <Assistant key={m.at} label={a.label} m={m} fresh={m.at === freshAt && i === msgs.length - 1} canInsert={!!note} onTick={scroll} onInsert={() => onInsert(m.text)} />)}
+          : <Assistant key={m.at} label={a.label} m={m} fresh={m.at === freshAt && i === msgs.length - 1} canInsert={!!note} onTick={scroll} onInsert={() => onInsert(m.text)} onInsertImage={() => insertImage(m)} />)}
         {busy && <span className="anim-fade text-micro text-dim animate-pulse">{t('thinking')}</span>}
         <div ref={end} />
       </div>

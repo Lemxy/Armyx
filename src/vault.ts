@@ -83,6 +83,7 @@ export const worktreeCreate = (id: string) => call<string>('worktree_create', { 
 export const worktreeDiff = (id: string) => call<string>('worktree_diff', { id })
 export const worktreeApply = (id: string) => call<boolean>('worktree_apply', { id })
 export const worktreeDiscard = (id: string) => call<void>('worktree_discard', { id })
+export const saveImage = (name: string, ext: string, bytes: number[]) => call<string>('save_image', { name, ext, bytes })
 export const stopAgents = () => call<void>('stop_agents')
 export const openRoot = () => call<void>('open_root')
 export const claudeUsage = () => call<string>('claude_usage')

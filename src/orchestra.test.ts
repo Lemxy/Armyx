@@ -1,5 +1,5 @@
 import { expect, test, vi } from 'vitest'
-import { isWriter, leadChat, RETRIES, retry, RUN_CAP, RUN_TOKEN_CAP, runOrchestra, save, section, slim, type Deps, type Entry, type Node, type Opts, type Orch } from './orchestra'
+import { fromTemplate, isWriter, leadChat, RETRIES, retry, RUN_CAP, RUN_TOKEN_CAP, runOrchestra, save, section, slim, type Deps, type Entry, type Node, type Opts, type Orch } from './orchestra'
 import { dsUsage } from './dsprice'
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -221,4 +221,61 @@ test('saving cuts long answers, drops their cache stamp, and survives a full quo
   expect(save('k', [o], { setItem: () => { throw new Error('full') } })).toBe('failed')
   expect(err).toHaveBeenCalled()
   err.mockRestore()
+})
+
+test('run one block again: it and what follows it rerun, the rest comes from the cache', async () => {
+  const o1 = orch([node('A'), node('B'), node('C')], [['L', 'A'], ['A', 'B'], ['L', 'C']])
+  const r1 = rig(o1, async (n) => lead(n))
+  await runOrchestra(o1, r1.d)
+  const o2 = { ...o1, nodes: [...r1.nodes.values()] }
+  const r2 = rig(o2, async (n) => lead(n))
+  await runOrchestra(o2, r2.d, { only: 'A' })
+  expect(r2.ids()).toEqual(['A', 'B'])
+  expect(r2.nodes.get('C')?.use?.same).toBe(true)
+})
+
+test('a conditional link passes only on OK (or only when not OK), and what follows is left out', async () => {
+  const ids = async (says: string, cond: 'ok' | 'bad') => {
+    const o = orch([node('A'), node('B'), node('C')], [['L', 'A'], ['A', 'B'], ['B', 'C']], { cond: { 'A>B': cond } })
+    const r = rig(o, async (n) => (n.id === 'A' ? ans(says) : lead(n)))
+    await runOrchestra(o, r.d)
+    return { ids: r.ids(), r }
+  }
+  expect((await ids('fix this', 'ok')).ids).toEqual(['L', 'A']) // B and C are skipped, quietly
+  expect((await ids('OK', 'ok')).ids).toEqual(['L', 'A', 'B', 'C', 'L'])
+  expect((await ids('OK', 'bad')).ids).toEqual(['L', 'A'])
+  expect((await ids('broken', 'bad')).ids).toEqual(['L', 'A', 'B', 'C', 'L'])
+  const skipped = await ids('fix this', 'ok')
+  expect(skipped.r.log.some((e) => e.kind === 'error')).toBe(false)
+})
+
+test('a reviewer after a tester: the coder and the tester are both redone, in order', async () => {
+  const o = orch([node('C', { agent: 'claude' }), node('T', { agent: 'claude' }), node('R', { review: 2 })], [['L', 'C'], ['C', 'T'], ['T', 'R']])
+  let c = 0, t = 0, r = 0
+  const rg = rig(o, async (n) => (n.id === 'C' ? ans(`code ${++c}`) : n.id === 'T' ? ans(`tests ${++t}`) : n.id === 'R' ? ans(r++ === 0 ? 'bad' : 'OK') : lead(n)))
+  await runOrchestra(o, rg.d)
+  expect(rg.ids().slice(0, 7)).toEqual(['L', 'C', 'T', 'R', 'C', 'T', 'R'])
+  expect(rg.calls.filter((x) => x.id === 'T')[1].prompt).toContain('code 2')
+})
+
+test('a run reports its cost, tokens, failures and final answer, and a block gets a start time', async () => {
+  const ok = orch([node('A')], [['L', 'A']])
+  const r1 = rig(ok, async (n) => lead(n))
+  const info = await runOrchestra(ok, r1.d)
+  expect(info).toMatchObject({ tokens: 6, failed: [], final: BRIEFING })
+  expect(typeof r1.nodes.get('A')?.since).toBe('number')
+  const bad = orch([node('A')], [['L', 'A']])
+  const r2 = rig(bad, async (n) => { if (n.id === 'A') throw new Error('boom'); return lead(n) })
+  expect((await runOrchestra(bad, r2.d))?.failed).toEqual(['A'])
+})
+
+test('a template becomes a fresh orchestra: new ids, links and conditions follow, old answers are gone', () => {
+  const tpl = { name: 't', nodes: [node('a', { kind: 'start', out: 'old', sum: 3, state: 'ok' as const }), node('b', { out: 'x', sid: 's' })], edges: [['a', 'b']] as [string, string][], cond: { 'a>b': 'ok' as const } }
+  let n = 0
+  const c = fromTemplate(tpl, () => `n${++n}`)
+  expect(c.nodes.map((x) => x.id)).toEqual(['n1', 'n2'])
+  expect(c.edges).toEqual([['n1', 'n2']])
+  expect(c.cond).toEqual({ 'n1>n2': 'ok' })
+  expect(c.nodes.every((x) => x.out === undefined && x.sum === undefined && x.sid === undefined && x.state === undefined)).toBe(true)
+  expect(tpl.nodes[0].out).toBe('old') // the template itself is untouched
 })

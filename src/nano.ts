@@ -1,10 +1,12 @@
 // Nano Banana = Gemini image models. One call: the conversation so far in, text plus one inline image out. Shared by the chat sidebar and the orchestra.
 export type NanoOut = { text: string; img: string; input: number; output: number }
 
-export async function nanoImage(key: string, model: string, turns: { role: 'user' | 'assistant'; text: string }[]): Promise<NanoOut> {
+const inline = (url: string) => { const [head, data] = url.split(','); return { inlineData: { mimeType: head.slice(5, head.indexOf(';')), data } } }
+
+export async function nanoImage(key: string, model: string, turns: { role: 'user' | 'assistant'; text: string; img?: string }[]): Promise<NanoOut> { // img = a picture the model should see (the one to change)
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key }, signal: AbortSignal.timeout(120_000),
-    body: JSON.stringify({ contents: turns.map((m) => ({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.text }] })), generationConfig: { responseModalities: ['TEXT', 'IMAGE'] } }),
+    body: JSON.stringify({ contents: turns.map((m) => ({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.text }, ...(m.img ? [inline(m.img)] : [])] })), generationConfig: { responseModalities: ['TEXT', 'IMAGE'] } }),
   })
   const j = await r.json()
   if (!r.ok) throw new Error(j.error?.message ?? r.statusText)

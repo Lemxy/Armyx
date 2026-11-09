@@ -10,7 +10,8 @@ export type Node = {
   agent?: Agent; model?: string; effort?: string; tools?: string; name?: string; role?: string // effort: Claude blocks only; tools = the only tools it may use; name = your title for the block; role = the recommended role it was picked for
   review?: number // reviewer: up to this many fix rounds (its input blocks rerun with its feedback until it answers OK); 0/undefined = a normal block
   text: string; notes: string[] // text = context for a model block, the rules themselves for a rules block; notes = embedded note names
-  out?: string; img?: string; state?: 'run' | 'ok' | 'err'
+  out?: string; img?: string; state?: 'run' | 'ok' | 'err'; since?: number // since = when the current call started (the timer on the block)
+ 
   sid?: string; mapSum?: number // claude session continued with --resume, so the dialogue isn't resent; mapSum = hash of the map that session last saw
   final?: string; finalSum?: number // lead only: its answer after the agents reported back, and the hash of the reports it was written from
   sum?: number; use?: Use // sum = hash of what the block was last run with: unchanged → its answer is reused; use = tokens of the last call
@@ -22,7 +23,9 @@ export type Entry = { from: string; to: string; text: string; kind: 'task' | 're
 export type Row = { who: string; use: Use }
 // iso: agents work in a git worktree, wt: that worktree exists and holds changes to review; queue: one block at a time; default: blocks run as soon as their inputs are ready, in parallel;
 // leadChat: a message to the lead is just answered, instead of briefing every agent again
-export type Orch = { id: string; name: string; task: string; nodes: Node[]; edges: [string, string][]; log?: Entry[]; queue?: boolean; iso?: boolean; wt?: boolean; leadChat?: boolean }
+// cond: a link that carries its answer only when the sender's answer is OK ("ok") or is not OK ("bad"), keyed `from>to`; runs: summaries of the last runs
+export type RunInfo = { at: number; cost: number; tokens: number; failed: string[]; final?: string }
+export type Orch = { id: string; name: string; task: string; nodes: Node[]; edges: [string, string][]; cond?: Record<string, 'ok' | 'bad'>; runs?: RunInfo[]; log?: Entry[]; queue?: boolean; iso?: boolean; wt?: boolean; leadChat?: boolean }
 export type Reply = Answer & { img?: string }
 
 export const INPUT_MAX = 12000, NOTE_MAX = 6000 // chars: a longer handoff is cut; a longer embedded note is passed as a file to read
@@ -72,7 +75,7 @@ export const section = (leadOut: string, letter: string) => {
 const READ_TOOLS = new Set(READ_ONLY.split(','))
 export const isWriter = (n: Node, tools?: string) =>
   ['claude', 'agy', 'codex'].includes(n.agent ?? 'claude') && !(tools !== undefined && (tools === '' || tools.split(',').every((x) => READ_TOOLS.has(x.trim()))))
-const isOk = (s: string) => /^ok\b/i.test(s.trim())
+export const isOk = (s: string) => /^ok\b/i.test(s.trim())
 
 export type Deps = {
   exec: (n: Node, build: (resumed: boolean) => string, opts: Opts) => Promise<Reply>
@@ -89,7 +92,7 @@ export type Deps = {
 }
 
 /** One run. `o` is the snapshot at the start: later changes go through `deps.patch`, and the engine tracks the answers itself (prev, outs). */
-export async function runOrchestra(o: Orch, d: Deps, { msg, force = false }: { msg?: string; force?: boolean } = {}) {
+export async function runOrchestra(o: Orch, d: Deps, { msg, force = false, only }: { msg?: string; force?: boolean; only?: string } = {}): Promise<Omit<RunInfo, 'at'> | undefined> {
   const { t, patch, addLog, who, label } = d
   const prev = new Map(o.nodes.map((n) => [n.id, n]))
   const agents = o.nodes.filter((n) => n.kind !== 'rules') // the lead (start) and the model blocks
@@ -100,9 +103,17 @@ export async function runOrchestra(o: Orch, d: Deps, { msg, force = false }: { m
   const left = new Set(agents.map((n) => n.id)), order: Node[] = []
   while (left.size) {
     const ready = [...left].filter((id) => !o.edges.some(([a, b]) => b === id && left.has(a)))
-    if (!ready.length) { patch([...left][0], { state: 'err', out: t('orchCycle') }); return }
+    if (!ready.length) { patch([...left][0], { state: 'err', out: t('orchCycle') }); return undefined }
     ready.forEach((id) => { left.delete(id); order.push(byId.get(id)!) })
   }
+  // every block reachable from `starts` along the links (down = towards what they feed, up = towards what feeds them)
+  const reach = (starts: string[], down: boolean) => {
+    const seen = new Set(starts)
+    for (let grew = true; grew;) { grew = false; for (const [a, b] of o.edges) { const [from, to] = down ? [a, b] : [b, a]; if (seen.has(from) && !seen.has(to)) { seen.add(to); grew = true } } }
+    return seen
+  }
+  const redo = only ? reach([only], true) : new Set<string>() // "run this block again": it and everything after it; the rest comes from the cache
+  const forced = (id: string) => force || redo.has(id)
   addLog({ from: '', to: '', text: '', kind: 'run' })
   const lead = o.nodes.find((n) => n.kind === 'start')!
   if (msg) addLog({ from: t('orchUser'), to: who(lead), toId: lead.id, text: msg, kind: 'user' })
@@ -110,6 +121,7 @@ export async function runOrchestra(o: Orch, d: Deps, { msg, force = false }: { m
   const outs = new Map<string, string>()
   let capped = false
   const bad = new Set<string>() // blocks that failed or were skipped because an input failed; independent branches keep running
+  const skipped = new Set<string>() // blocks left out because a link's condition was not met, and everything after them
   const rows: Row[] = [] // filled as blocks finish; posted as one table when the run ends
   // shortcut: the caps are checked when a block starts, so parallel blocks can overshoot by one round; upgrade to reservations if it matters
   const over = () => {
@@ -151,7 +163,7 @@ export async function runOrchestra(o: Orch, d: Deps, { msg, force = false }: { m
     // blocks that can read the project also depend on its state: after the code changed their old answer is stale
     const stamp = n.agent !== 'deepseek' && n.agent !== 'nano' ? await d.stamp().catch(() => '') : ''
     const sum = hash([n.agent ?? 'claude', n.model, opts.effort, n.tools, o.iso, stamp, key].join('\0')), old = prev.get(n.id)
-    if (!force && old?.state === 'ok' && old.out && old.sum === sum && (n.agent !== 'nano' || old.img)) { // same input as last time: reuse the answer, spend nothing
+    if (!forced(n.id) && old?.state === 'ok' && old.out && old.sum === sum && (n.agent !== 'nano' || old.img)) { // same input as last time: reuse the answer, spend nothing
       outs.set(n.id, old.out); const use = { input: 0, cached: 0, output: 0, cost: 0, same: true }
       patch(n.id, { state: 'ok', out: old.out, img: old.img, sum, use }); rows.push({ who: who(n), use }); return true
     }
@@ -159,7 +171,7 @@ export async function runOrchestra(o: Orch, d: Deps, { msg, force = false }: { m
     const given = from.filter((f) => f.kind !== 'rules').map((f) => (f.kind === 'start' ? section(outs.get(f.id) ?? '', tag(n.id)) : outs.get(f.id) ?? '')).join('\n\n') || n.text || o.task || (n.kind === 'start' ? t('orchLeadDefault') : '')
     const sender = from.filter((f) => f.kind !== 'rules').map(who).join(', ') || t('orchUser')
     if (!(n.kind === 'start' && msg)) addLog({ from: sender, to: who(n), toId: n.id, text: feedback ? `${given}\n\n# Review feedback\n${feedback}` : given, kind: 'task', quiet: from.length > 0 && from.every((f) => f.kind === 'model') && !feedback }) // your message is already in the log; a model-to-model handoff is already shown as the sender's reply
-    patch(n.id, { state: 'run' })
+    patch(n.id, { state: 'run', since: Date.now() })
     const writes = isWriter(n, opts.tools)
     try {
       const call = () => d.exec(n, build, opts)
@@ -179,15 +191,22 @@ export async function runOrchestra(o: Orch, d: Deps, { msg, force = false }: { m
 
   const step = async (n: Node) => {
     if (d.stopped()) return
-    if (o.edges.some((e) => e[1] === n.id && bad.has(e[0]))) { bad.add(n.id); return }
+    const into = o.edges.filter((e) => e[1] === n.id)
+    if (into.some((e) => bad.has(e[0]))) { bad.add(n.id); return }
+    const unmet = (e: [string, string]) => { const c = o.cond?.[`${e[0]}>${e[1]}`]; return !!c && outs.has(e[0]) && isOk(outs.get(e[0])!) !== (c === 'ok') }
+    if (into.some((e) => skipped.has(e[0]) || unmet(e))) { skipped.add(n.id); return }
     if (!(await block(n)) || !n.review) return
     // Reviewer: not OK → its input blocks do the work again with its feedback, then it looks again. The graph stays a DAG; the loop lives here.
-    const coders = o.edges.filter((e) => e[1] === n.id).map((e) => byId.get(e[0])!).filter((f) => f.kind === 'model')
+    // What is redone: the writing blocks before the reviewer and whatever sits between them and it (a tester, say), so the reviewer sees fresh facts.
+    // With no writer among them, only the blocks feeding the reviewer directly.
+    const before = reach([n.id], false); before.delete(n.id)
+    const writers = order.filter((m) => m.kind === 'model' && before.has(m.id) && isWriter(m, m.tools)).map((m) => m.id)
+    const redoIds = writers.length ? new Set([...reach(writers, true)].filter((id) => before.has(id))) : new Set(into.map((e) => e[0]))
+    const again = order.filter((m) => m.kind === 'model' && redoIds.has(m.id)) // topological, so each block sees its inputs' new answers
     let out = outs.get(n.id)!, rounds = n.review
     while (!isOk(out) && rounds > 0) {
       rounds--
-      const ok = await Promise.all(coders.map((c) => block(c, out)))
-      if (!ok.every(Boolean)) { if (coders.some((c) => bad.has(c.id))) bad.add(n.id); return }
+      for (const c of again) if (!(await block(c, out))) { if (again.some((x) => bad.has(x.id))) bad.add(n.id); return }
       if (!(await block(n))) return
       out = outs.get(n.id)!
     }
@@ -201,6 +220,7 @@ export async function runOrchestra(o: Orch, d: Deps, { msg, force = false }: { m
   }
   await Promise.all(done.values())
   // The agents report back: the lead reads what the last blocks answered and writes the final answer (once; it does not brief anyone again).
+  let finalText: string | undefined
   const sinks = order.filter((n) => n.kind === 'model' && outs.has(n.id) && !o.edges.some((e) => e[0] === n.id))
   if (!bad.has(lead.id) && !d.stopped() && sinks.length && o.edges.some((e) => e[0] === lead.id) && !over()) {
     const prompt = [`# Role\nYou are the lead agent of an orchestra. Your agents have reported back. Write the final answer to the task: merge their findings, say where they disagree, and what is still unknown. Do not brief anyone again.`,
@@ -210,12 +230,12 @@ export async function runOrchestra(o: Orch, d: Deps, { msg, force = false }: { m
     const fin = `${who(lead)} · ${t('orchFinal')}`
     try {
       if (!force && old?.final && old.finalSum === fsum) {
-        patch(lead.id, { final: old.final, finalSum: fsum }); rows.push({ who: fin, use: { input: 0, cached: 0, output: 0, cost: 0, same: true } })
+        finalText = old.final; patch(lead.id, { final: old.final, finalSum: fsum }); rows.push({ who: fin, use: { input: 0, cached: 0, output: 0, cost: 0, same: true } })
         addLog({ from: fin, fromId: lead.id, to: t('orchUser'), text: old.final, kind: 'reply' })
       } else {
         patch(lead.id, { state: 'run' })
         const { text: final, ...use } = await retry(() => d.exec(lead, () => prompt, { tools: '', effort: lead.effort ?? 'low' }), d.stopped)
-        rows.push({ who: fin, use }); patch(lead.id, { final, finalSum: fsum, state: 'ok' })
+        finalText = final; rows.push({ who: fin, use }); patch(lead.id, { final, finalSum: fsum, state: 'ok' })
         addLog({ from: fin, fromId: lead.id, to: t('orchUser'), text: final, kind: 'reply' })
       }
     } catch (e) {
@@ -223,6 +243,8 @@ export async function runOrchestra(o: Orch, d: Deps, { msg, force = false }: { m
     }
   }
   if (rows.length) addLog({ from: '', to: '', text: '', kind: 'usage', rows })
+  const sum = rows.reduce((a, r) => ({ cost: a.cost + r.use.cost, tokens: a.tokens + r.use.input + r.use.output }), { cost: 0, tokens: 0 })
+  return { ...sum, failed: [...bad].map((id) => who(byId.get(id)!)), final: finalText }
 }
 
 /** A message to the lead that is only answered: nobody is briefed, and the lead's briefing, cache and final answer stay as they were. */
@@ -254,6 +276,7 @@ const cut = (s: string) => (s.length > SAVE_MAX ? `${s.slice(0, SAVE_MAX)}…(cu
 /** What goes to disk: long answers shortened, images dropped. A shortened answer loses its cache stamp, so it is never reused as if it were whole. */
 export const slim = (orchs: Orch[], keep = LOG_MAX): Orch[] => orchs.map((o) => ({
   ...o,
+  runs: o.runs?.map((r) => ({ ...r, final: r.final && cut(r.final) })),
   log: o.log?.slice(-keep).map((e) => ({ ...e, text: cut(e.text), img: undefined })),
   nodes: o.nodes.map((n) => ({
     ...n, img: undefined,
@@ -265,4 +288,17 @@ export const slim = (orchs: Orch[], keep = LOG_MAX): Orch[] => orchs.map((o) => 
 export function save(key: string, orchs: Orch[], store: Pick<Storage, 'setItem'> = localStorage): 'ok' | 'trimmed' | 'failed' {
   try { store.setItem(key, JSON.stringify(slim(orchs))); return 'ok' } catch { /* quota: try less */ }
   try { store.setItem(key, JSON.stringify(slim(orchs, LOG_MIN))); return 'trimmed' } catch (e) { console.error('orchestra: cannot save', e); return 'failed' }
+}
+
+// ---- templates ----
+export type Template = { name: string; nodes: Node[]; edges: [string, string][]; cond?: Orch['cond'] }
+/** A fresh copy of a template's blocks: new ids, nothing left over from earlier runs. */
+export const fromTemplate = (tpl: Template, uid: () => string): Pick<Orch, 'nodes' | 'edges' | 'cond'> => {
+  const ids = new Map(tpl.nodes.map((n) => [n.id, uid()]))
+  const map = ([a, b]: [string, string]): [string, string] => [ids.get(a)!, ids.get(b)!]
+  return {
+    nodes: tpl.nodes.map((n) => ({ ...n, id: ids.get(n.id)!, out: undefined, img: undefined, state: undefined, use: undefined, sid: undefined, sum: undefined, final: undefined, finalSum: undefined, mapSum: undefined, since: undefined })),
+    edges: tpl.edges.map(map),
+    cond: tpl.cond && Object.fromEntries(Object.entries(tpl.cond).map(([k, v]) => [map(k.split('>') as [string, string]).join('>'), v])),
+  }
 }

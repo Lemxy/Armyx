@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowUp, FolderOpen, GitBranch, Play, Plus, Square, Trash2, X } from 'lucide-react'
+import { ArrowUp, BookmarkPlus, FolderOpen, GitBranch, History, Plus, RotateCcw, Square, Trash2, X } from 'lucide-react'
 import { useI18n } from '../i18n'
 import { agyModels, inTauri, openRoot, runAgent, stopAgents, worktreeApply, worktreeCreate, worktreeDiff, worktreeDiscard, worktreeStamp, type Answer } from '../vault'
 import Markdown from './Markdown'
@@ -12,7 +12,7 @@ import { dsChat } from '../deepseek'
 import { dsUsage } from '../dsprice'
 import { nanoImage } from '../nano'
 import { getImg, imgId, putImg } from '../imgs'
-import { BRIEF, BUDGET, clip, leadChat, LOG_MAX, NOTE_MAX, READ_ONLY, runOrchestra, save, workerEffort, MAX_TURNS, type Agent, type Deps, type Entry, type Node, type Opts, type Orch, type Reply, type Row, type Use } from '../orchestra'
+import { BRIEF, BUDGET, clip, fromTemplate, leadChat, LOG_MAX, NOTE_MAX, READ_ONLY, runOrchestra, save, workerEffort, MAX_TURNS, type Agent, type Deps, type Entry, type Node, type Opts, type Orch, type Reply, type Row, type Template, type Use } from '../orchestra'
 
 const DEEPSEEK = MODELS.deepseek
 const EFFORTS = ['low', 'medium', 'high', 'max'] as const
@@ -46,6 +46,21 @@ const ROLES: readonly Role[] = [
   { ru: 'Тестировщик', en: 'Tester', ruText: 'Ты тестировщик. Запусти тесты и сборку; при падении назови причину и файл. Код не чини.',
     enText: 'You are the tester. Run the tests and the build; on a failure name the cause and the file. Do not fix the code.' },
 ]
+// Ready-made orchestras (the blocks are filled from the roles above) and your own, saved from the current one.
+const builtin = (lang: 'ru' | 'en'): Template[] => {
+  const S = MODELS.claude[0][0], H = 'claude-haiku-5-5'
+  const [coder, reviewer, researcher, , tester] = ROLES
+  const lead: Node = { id: 'l', x: 40, y: 40, kind: 'start', agent: 'claude', model: S, text: '', notes: [] }
+  const role = (id: string, x: number, r: Role, model: string): Node => ({ id, x, y: 40, kind: 'model', agent: 'claude', model, role: r[lang], text: r[lang === 'ru' ? 'ruText' : 'enText'], notes: [], review: r.review, tools: r.tools })
+  return [
+    { name: lang === 'ru' ? 'Код + ревью' : 'Code + review', nodes: [lead, role('a', 360, researcher, H), role('b', 680, coder, S), role('c', 1000, reviewer, S)], edges: [['l', 'a'], ['a', 'b'], ['b', 'c']] },
+    { name: lang === 'ru' ? 'Код + тесты + ревью' : 'Code + tests + review', nodes: [lead, role('b', 360, coder, S), role('t', 680, tester, S), role('c', 1000, reviewer, S)], edges: [['l', 'b'], ['b', 't'], ['t', 'c']] },
+  ]
+}
+const TPL = 'desovault.orchestra.templates' // global: shared by every project
+const loadTpl = (): Template[] => { try { return JSON.parse(localStorage.getItem(TPL) ?? '[]') } catch { return [] } }
+const RUNS_KEPT = 5
+const SLOW = 120 // seconds a block may run before its timer turns to a warning
 const k = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`)
 
 const W = 272, HEAD = 20 // node width; y of the link handles, measured from the node's top
@@ -63,6 +78,8 @@ export default function Orchestra({ notes, project, onMenu }: { notes: Note[]; p
   const [aid, setAid] = useState(orchs[0].id)
   const [wire, setWire] = useState<{ from: string; x: number; y: number } | null>(null) // link being dragged
   const [running, setRunning] = useState(false)
+  const [showRuns, setShowRuns] = useState(false)
+  const [saved, setSaved] = useState<Template[]>(loadTpl)
   const stopped = useRef(false) // Stop was pressed: blocks not started yet stay idle
   const [agy, setAgy] = useState<readonly (readonly [string, string])[]>(MODELS.agy)
   const canvas = useRef<HTMLDivElement>(null)
@@ -82,6 +99,18 @@ export default function Orchestra({ notes, project, onMenu }: { notes: Note[]; p
   const addLog = (e: Omit<Entry, 'at'>) => {
     if (e.img) { e = { ...e, imgId: imgId() }; putImg(e.imgId!, e.img!) } // the picture goes to the image store, the log keeps its id
     upd((c) => ({ ...c, log: [...(c.log ?? []), { ...e, at: Date.now() }].slice(-LOG_MAX) }))
+  }
+  const newFromTemplate = (v: string) => {
+    const tpl = (v[0] === 'b' ? builtin(lang) : saved)[+v.slice(1)]
+    if (!tpl) return
+    const c: Orch = { ...fresh(orchs.length + 1), name: tpl.name, ...fromTemplate(tpl, uid) }
+    setOrchs([...orchs, c]); setAid(c.id)
+  }
+  const saveTemplate = () => {
+    const tpl: Template = { name: o.name, edges: o.edges, cond: o.cond, nodes: o.nodes.map(({ out, img, state, use, sid, sum, final, finalSum, mapSum, since, ...n }) => n) }
+    const next = [...saved.filter((x) => x.name !== o.name), tpl]
+    setSaved(next)
+    try { localStorage.setItem(TPL, JSON.stringify(next)) } catch (e) { console.error(e) }
   }
   const applyRole = (n: Node, r: Role | null) => {
     if (!r) return patch(n.id, { role: undefined, review: undefined, tools: undefined })
@@ -188,11 +217,15 @@ ${clip(d)}
   })
   // `msg` = something you wrote to the lead: the lead takes it as a new instruction and briefs every agent again.
   // force (Shift+click on Run): rerun every block, even one whose input has not changed.
-  const run = async (msg?: string, force = false) => {
+  // only = a block id: that block and what follows it run again, the rest comes from the cache.
+  const run = async (msg?: string, force = false, only?: string) => {
     if (running || !(await isolate())) return
     stopped.current = false
     setRunning(true)
-    try { await runOrchestra(o, deps(), { msg, force }) } finally { setRunning(false) }
+    try {
+      const info = await runOrchestra(o, deps(), { msg, force, only })
+      if (info) upd((c) => ({ ...c, runs: [...(c.runs ?? []), { at: Date.now(), ...info }].slice(-RUNS_KEPT) }))
+    } finally { setRunning(false) }
   }
 
   // The saved dialogue as one agent saw it: what it was asked and what it answered.
@@ -271,29 +304,48 @@ ${clip(d)}
   }
 
   const spent = o.nodes.reduce((a, n) => (n.use && !n.use.same ? { n: a.n + 1, input: a.input + n.use.input, cached: a.cached + n.use.cached, output: a.output + n.use.output, cost: a.cost + n.use.cost } : a), { n: 0, input: 0, cached: 0, output: 0, cost: 0 })
+  // Input tokens only: the task, each block's context and notes, and the project map for the lead. The answers come on top.
+  const est = o.nodes.reduce((a, n) => n.kind === 'rules' ? a : a + tokens(`${o.task} ${n.text}`) + (n.kind === 'start' ? mapTok : n.notes.reduce((s, x) => { const c = notes.find((q) => q.name === x)?.content ?? ''; return s + (c.length > NOTE_MAX ? 50 : tokens(c)) }, 0)), 0)
   const pos = (id: string, side: 'in' | 'out') => { const n = o.nodes.find((x) => x.id === id)!; return [n.x + (side === 'out' ? W : 0), n.y + HEAD] }
   const dot = 'absolute top-[14px] w-3 h-3 rounded-full border-2 border-accent bg-surface'
 
   return (
     <div className="h-full flex">
-    <div className="flex-1 min-w-0 flex flex-col">
+    <div className="flex-1 min-w-0 flex flex-col relative">
       <div className="flex items-center gap-2 px-5 h-12 border-b border-line">
         <select value={o.id} onChange={(e) => setAid(e.target.value)} className={`${field} w-40`}>{orchs.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
         <button title={t('orchNew')} onClick={() => { const c = fresh(orchs.length + 1); setOrchs([...orchs, c]); setAid(c.id) }} className="btn-press p-1.5 rounded-lg text-dim hover:text-fg hover:bg-panel"><Plus size={15} /></button>
         <button title={t('delete')} disabled={orchs.length < 2} onClick={() => { const rest = orchs.filter((x) => x !== o); setOrchs(rest); setAid(rest[0].id) }} className="btn-press p-1.5 rounded-lg text-dim hover:text-status-err disabled:opacity-30"><Trash2 size={15} /></button>
         <input value={o.name} onChange={(e) => upd((c) => ({ ...c, name: e.target.value }))} placeholder={t('orchName')} className={`${field} w-44`} />
         <button title={t('orchIsoTip')} onClick={() => upd((c) => ({ ...c, iso: !c.iso }))} disabled={running || !inTauri} className={`btn-press flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs border ${o.iso ? 'border-accent text-accent' : 'border-line text-dim'} disabled:opacity-40`}><GitBranch size={13} />{t('orchIso')}</button>
+        <select value="" onChange={(e) => newFromTemplate(e.target.value)} title={t('orchTpl')} className={`${field} w-32`}>
+          <option value="">{t('orchTpl')}</option>
+          <optgroup label={t('orchTplBuiltin')}>{builtin(lang).map((x, i) => <option key={i} value={`b${i}`} className="bg-panel">{x.name}</option>)}</optgroup>
+          {saved.length > 0 && <optgroup label={t('orchTplSaved')}>{saved.map((x, i) => <option key={i} value={`s${i}`} className="bg-panel">{x.name}</option>)}</optgroup>}
+        </select>
+        <button title={t('orchTplSave')} onClick={saveTemplate} className="btn-press p-1.5 rounded-lg text-dim hover:text-fg hover:bg-panel"><BookmarkPlus size={15} /></button>
         {o.iso && o.wt && !running && <>{(['diff', 'apply', 'discard'] as const).map((w) => <button key={w} onClick={() => review(w)} className={`btn-press px-2.5 py-1.5 rounded-lg text-xs border border-line ${w === 'discard' ? 'text-dim hover:text-status-err' : 'text-fg hover:border-accent'}`}>{t(w === 'diff' ? 'orchDiff' : w === 'apply' ? 'orchApply' : 'orchDiscard')}</button>)}</>}
+        {!running && est > 0 && <span title={t('orchEstTip')} className="text-micro text-dim tabular-nums shrink-0">≈ ↑{k(est)}</span>}
+        <button title={t('orchRuns')} onClick={() => setShowRuns((v) => !v)} className={`btn-press p-1.5 rounded-lg hover:text-fg hover:bg-panel ${showRuns ? 'text-fg bg-panel' : 'text-dim'}`}><History size={15} /></button>
         {spent.n > 0 && <span title={t('orchUseTip')} className="text-micro text-dim tabular-nums shrink-0">↑{k(spent.input)} ⟳{k(spent.cached)} ↓{k(spent.output)}{spent.cost > 0 && ` · $${spent.cost.toFixed(2)}`}</span>}
       </div>
+      {showRuns && <div className="anim-fade absolute right-4 top-12 z-20 w-96 max-h-80 overflow-auto rounded-xl bg-surface border border-line shadow-float p-3 flex flex-col gap-2 text-xs">
+        {(o.runs ?? []).length === 0 ? <p className="text-dim">{t('orchRunsEmpty')}</p> : [...(o.runs ?? [])].reverse().map((r) => (
+          <details key={r.at}><summary className="cursor-pointer tabular-nums">{hm(r.at)} · {k(r.tokens)} tok{r.cost > 0 && ` · $${r.cost.toFixed(2)}`}{r.failed.length > 0 && <span className="text-status-err"> · ✕ {r.failed.join(', ')}</span>}</summary>
+            {r.final && <pre className="mt-1 whitespace-pre-wrap text-micro text-mut">{r.final}</pre>}</details>))}
+      </div>}
       <div ref={canvas} onPointerDown={pan} onContextMenu={canvasMenu} className="flex-1 min-h-0 overflow-auto relative cursor-grab">
         <div className="relative" style={{ width: 3000, height: 2000 }}>
           <svg className="absolute inset-0 w-full h-full pointer-events-none">
             {o.edges.map(([a, b]) => {
               const [x1, y1] = pos(a, 'out'), [x2, y2] = pos(b, 'in'), dx = Math.max(50, Math.abs(x2 - x1) / 2)
               const d = `M${x1} ${y1} C${x1 + dx} ${y1} ${x2 - dx} ${y2} ${x2} ${y2}`
-              return <g key={a + b}><path d={d} fill="none" stroke="var(--accent)" strokeWidth="2" opacity=".9" />
-                <path d={d} fill="none" stroke="transparent" strokeWidth="12" className="pointer-events-auto cursor-pointer" onClick={() => upd((c) => ({ ...c, edges: c.edges.filter((e) => !(e[0] === a && e[1] === b)) }))}><title>{t('orchUnlink')}</title></path></g>
+              const ck = `${a}>${b}`, cond = o.cond?.[ck], next = { undefined: 'ok', ok: 'bad', bad: undefined }[String(cond) as 'undefined' | 'ok' | 'bad'] as 'ok' | 'bad' | undefined
+              return <g key={a + b}><path d={d} fill="none" stroke="var(--accent)" strokeWidth="2" opacity=".9" strokeDasharray={cond ? '6 4' : undefined} />
+                {cond && <text x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 6} textAnchor="middle" fontSize="11" fill="var(--accent)" className="pointer-events-none">{t(cond === 'ok' ? 'orchEdgeOk' : 'orchEdgeBad')}</text>}
+                <path d={d} fill="none" stroke="transparent" strokeWidth="12" className="pointer-events-auto cursor-pointer"
+                  onClick={() => upd((c) => { const { [ck]: _, ...rest } = c.cond ?? {}; return { ...c, cond: next ? { ...rest, [ck]: next } : rest } })}
+                  onContextMenu={(e) => onMenu(e, [{ label: t('orchUnlink'), danger: true, onClick: () => upd((c) => ({ ...c, edges: c.edges.filter((x) => !(x[0] === a && x[1] === b)) })) }])}><title>{t('orchEdgeTip')}</title></path></g>
             })}
             {wire && (() => { const [x1, y1] = pos(wire.from, 'out'); return <path d={`M${x1} ${y1} L${wire.x} ${wire.y}`} stroke="var(--accent)" strokeWidth="2" strokeDasharray="5 4" fill="none" /> })()}
           </svg>
@@ -309,7 +361,8 @@ ${clip(d)}
                     <input value={n.name ?? ''} onChange={(e) => patch(n.id, { name: e.target.value })} placeholder={t('orchNamePh')} spellCheck={false}
                       className="min-w-0 flex-1 bg-transparent text-sm font-medium outline-none placeholder:text-dim placeholder:font-normal" />
                   </>}
-                {n.kind !== 'start' && <button title={t('delete')} onClick={() => remove(n.id)} className="p-1 rounded text-dim hover:text-status-err ml-auto"><X size={12} /></button>}
+                <button title={t('orchRerun')} disabled={running} onClick={() => run(undefined, false, n.id)} className={`p-1 rounded text-dim hover:text-accent disabled:opacity-30 ${n.kind === 'start' ? 'ml-auto' : ''}`}><RotateCcw size={12} /></button>
+                {n.kind !== 'start' && <button title={t('delete')} onClick={() => remove(n.id)} className="p-1 rounded text-dim hover:text-status-err"><X size={12} /></button>}
               </div>
               {n.kind !== 'rules' && <div className="flex items-center gap-1.5 px-5 py-1.5 border-b border-line min-w-0">
                   <select value={`${n.agent ?? 'claude'}:${n.model ?? MODELS.claude[0][0]}`} onChange={(e) => { if (e.target.value.startsWith('preset:')) return patch(n.id, { ...resolve(PRESETS[+e.target.value.slice(7)]), role: PRESETS[+e.target.value.slice(7)][lang], review: undefined }); const [agent, model] = e.target.value.split(':') as [Agent, string]; patch(n.id, { agent, model, role: undefined, tools: undefined, review: undefined, ...(agent !== 'claude' && { effort: undefined }) }) }}
@@ -331,6 +384,7 @@ ${clip(d)}
                 {n.kind !== 'rules' && (n.agent ?? 'claude') === 'claude' && <select value={n.effort ?? (n.kind === 'start' ? 'low' : '')} onChange={(e) => patch(n.id, { effort: e.target.value || undefined })} title={t('orchEffort')} className={field}>
                   {n.kind !== 'start' && <option value="">{t('orchEffort')}: auto</option>}{EFFORTS.map((x) => <option key={x} value={x}>{t('orchEffort')}: {x}</option>)}</select>}
                 {n.kind === 'start' && <span className="text-micro text-dim">{t('orchMapCtx', { n: notes.length, k: mapTok })}</span>}
+                {n.state === 'run' && n.since && <Elapsed since={n.since} />}
                 {n.use && <span title={t('orchUseTip')} className="text-micro text-dim tabular-nums">{n.use.same ? t('orchSame') : `↑${k(n.use.input)} ⟳${k(n.use.cached)} ↓${k(n.use.output)}${n.use.cost > 0 ? ` · $${n.use.cost.toFixed(3)}` : ''}`}</span>}
                 {n.kind === 'start' && n.out && <pre className={`max-h-48 overflow-auto whitespace-pre-wrap text-micro p-2 rounded-lg bg-field ${n.state === 'err' ? 'text-status-err' : 'text-mut'}`}>{n.out}</pre>}
                 {n.kind === 'start' && n.final && <pre className="max-h-48 overflow-auto whitespace-pre-wrap text-micro p-2 rounded-lg bg-accent-dim text-fg">{n.final}</pre>}
@@ -354,6 +408,14 @@ ${clip(d)}
       agents={o.nodes.filter((n) => n.kind !== 'rules').map((n) => ({ id: n.id, name: who(n), role: n.role ?? (n.kind === 'model' ? n.text.split(/\r?\n/)[0].slice(0, 60) : undefined), state: n.state, task: [...log].reverse().find((e) => e.kind === 'task' && e.toId === n.id)?.text }))} />
     </div>
   )
+}
+
+/** How long the block's current call has been running; turns to a warning past SLOW seconds. */
+function Elapsed({ since }: { since: number }) {
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => { const i = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(i) }, [])
+  const s = Math.max(0, Math.floor((now - since) / 1000))
+  return <span className={`text-micro tabular-nums ${s > SLOW ? 'text-status-err' : 'text-dim'}`}>{Math.floor(s / 60)}:{String(s % 60).padStart(2, '0')}</span>
 }
 
 const DOT = { run: 'bg-accent animate-pulse', ok: 'bg-status-ok', err: 'bg-status-err' } as const

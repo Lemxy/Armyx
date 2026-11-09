@@ -97,6 +97,17 @@ fn save_note(name: String, content: String) -> Result<(), String> {
     fs::write(d.join(format!("{name}.deso")), content).map_err(|e| e.to_string())
 }
 
+// A generated picture saved next to the notes (`images/<name>.<ext>`); returns that relative path for a link in a note.
+#[tauri::command]
+fn save_image(name: String, ext: String, bytes: Vec<u8>) -> Result<String, String> {
+    valid(&name)?;
+    if !["png", "jpg", "jpeg", "webp"].contains(&ext.as_str()) { return Err(format!("bad image type: {ext}")) }
+    let d = data_dir().join("images");
+    fs::create_dir_all(&d).map_err(|e| e.to_string())?;
+    fs::write(d.join(format!("{name}.{ext}")), bytes).map_err(|e| e.to_string())?;
+    Ok(format!("images/{name}.{ext}"))
+}
+
 #[tauri::command]
 fn delete_note(name: String) -> Result<(), String> {
     valid(&name)?;
@@ -477,7 +488,7 @@ hand-written
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![list_notes, read_note, save_note, delete_note, run_agent, stop_agents, agy_models, claude_usage, agy_usage, keys_load, keys_save, watch_project, worktree_create, project_stamp, worktree_diff, worktree_apply, worktree_discard, index_project, set_root, get_root, open_root])
+        .invoke_handler(tauri::generate_handler![list_notes, read_note, save_note, save_image, delete_note, run_agent, stop_agents, agy_models, claude_usage, agy_usage, keys_load, keys_save, watch_project, worktree_create, project_stamp, worktree_diff, worktree_apply, worktree_discard, index_project, set_root, get_root, open_root])
         .run(tauri::generate_context!())
         .expect("error while running Taurium");
 }
