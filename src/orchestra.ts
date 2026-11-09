@@ -18,7 +18,7 @@ export type Node = {
 export type Opts = { keep?: boolean; tools?: string; effort?: string; mapSum?: number; maxTurns?: number }
 // The dialogue is saved with the orchestra. `task` = what an agent was asked, `user` = a message you wrote, `run` = a divider between runs.
 // `usage` = the table of who spent what, posted after every run or answer (rows; no ids, so it never enters an agent's dialogue).
-export type Entry = { from: string; to: string; text: string; kind: 'task' | 'reply' | 'error' | 'user' | 'run' | 'usage'; at: number; toId?: string; fromId?: string; quiet?: boolean; rows?: Row[]; img?: string }
+export type Entry = { from: string; to: string; text: string; kind: 'task' | 'reply' | 'error' | 'user' | 'run' | 'usage'; at: number; toId?: string; fromId?: string; quiet?: boolean; rows?: Row[]; img?: string; imgId?: string } // imgId = the picture's id in the image store (src/imgs.ts): img itself is never saved
 export type Row = { who: string; use: Use }
 // iso: agents work in a git worktree, wt: that worktree exists and holds changes to review; queue: one block at a time; default: blocks run as soon as their inputs are ready, in parallel;
 // leadChat: a message to the lead is just answered, instead of briefing every agent again

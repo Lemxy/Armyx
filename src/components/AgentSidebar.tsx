@@ -6,24 +6,28 @@ import { useI18n } from '../i18n'
 import { graphMap, MAP_INTRO, tokens, type Note } from '../deso'
 import { getKey, setKey } from '../keys'
 import { dsChat } from '../deepseek'
+import { nanoImage } from '../nano'
+import { imgId, putImg } from '../imgs'
+import StoredImg from './StoredImg'
 import { agyModels, agyUsage, claudeUsage, inTauri, openRoot, runAgentCli } from '../vault'
 
-type Id = 'claude' | 'agy' | 'deepseek'
+type Id = 'claude' | 'agy' | 'deepseek' | 'nano'
 type Mode = 'cli' | 'api'
-type Msg = { role: 'user' | 'assistant'; text: string; at: number; error?: boolean; tin?: number; tout?: number }
+type Msg = { role: 'user' | 'assistant'; text: string; at: number; error?: boolean; tin?: number; tout?: number; img?: string; imgId?: string } // img = a generated picture; only imgId is saved (src/imgs.ts)
 type Chat = { id: string; title: string; msgs: Msg[]; at: number }
 
 const AGENTS = {
   claude: { label: 'Claude', cli: 'claude', key: 'Anthropic API Key' },
   agy: { label: 'Antigravity', cli: 'agy', key: 'Gemini API Key' },
   deepseek: { label: 'DeepSeek', cli: '', key: 'DeepSeek API Key' }, // API only: no CLI
+  nano: { label: 'Nano Banana', cli: '', key: 'Gemini API Key' }, // API only, draws pictures; uses the Gemini key of Antigravity
 } as const
 
 // [id, label]. Every model takes an effort level: Claude via output_config.effort, Gemini via a thinking budget.
 export const MODELS = {
   claude: [['claude-sonnet-5-5', 'Claude Sonnet 5.5'], ['claude-opus-5-5', 'Claude Opus 5.5'], ['claude-haiku-5-5', 'Claude Haiku 5.5']],
   agy: [['gemini-3.8-flash', 'Gemini 3.8 Flash'], ['gemini-3.5-flash-lite', 'Gemini 3.5 Flash-Lite']],
-  nano: [['gemini-2.5-flash-image', 'Nano Banana'], ['gemini-3-pro-image-preview', 'Nano Banana Pro']], // image models: used by the orchestra only
+  nano: [['gemini-2.5-flash-image', 'Nano Banana'], ['gemini-3-pro-image-preview', 'Nano Banana Pro']], // image models: the orchestra and the chat
   deepseek: [['deepseek-v4-flash', 'DeepSeek V4 Flash'], ['deepseek-v4-pro', 'DeepSeek V4 Pro'], ['deepseek-chat', 'DeepSeek V3 (chat)'], ['deepseek-reasoner', 'DeepSeek R1 (reasoner)']],
 } as const
 // [level, Gemini thinking budget]
@@ -82,7 +86,7 @@ const save = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.str
 const CFG = 'desovault.agent'
 type Cfg = { id: Id; models: Record<Id, string>; modes: Record<Id, Mode>; effort: number }
 type Row = { title?: string; k: 'usage5h' | 'usage7d'; pct: number; reset: string }
-const DEFAULT: Cfg = { id: 'claude', models: { claude: MODELS.claude[0][0], agy: MODELS.agy[0][0], deepseek: MODELS.deepseek[0][0] }, modes: { claude: inTauri ? 'cli' : 'api', agy: inTauri ? 'cli' : 'api', deepseek: 'api' }, effort: 1 }
+const DEFAULT: Cfg = { id: 'claude', models: { claude: MODELS.claude[0][0], agy: MODELS.agy[0][0], deepseek: MODELS.deepseek[0][0], nano: MODELS.nano[0][0] }, modes: { claude: inTauri ? 'cli' : 'api', agy: inTauri ? 'cli' : 'api', deepseek: 'api', nano: 'api' }, effort: 1 }
 const uid = () => Math.random().toString(36).slice(2, 10)
 
 /** Reveals `text` progressively (~4s max) so replies appear typed. */
@@ -107,6 +111,7 @@ function Assistant({ label, m, fresh, canInsert, onInsert, onTick }: { label: st
     <div className="flex flex-col gap-2 anim-rise" onClick={typing ? skip : undefined}>
       <span className="flex items-center gap-1.5 text-micro text-accent"><Sparkles size={11} />{label}</span>
       {m.error ? <p className="text-sm text-status-err whitespace-pre-wrap">{m.text}</p> : <Markdown text={shown} />}
+      {m.img || m.imgId ? <StoredImg src={m.img} id={m.imgId} /> : null}
       {typing && <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />}
       {!typing && !m.error && (
         <div className="flex items-center gap-1 text-micro text-dim">
@@ -128,7 +133,7 @@ const ago = (at: number) => {
 export default function AgentSidebar({ notes, note, project, onInsert, onClose }: { notes: Note[]; note?: Note; project: string; onInsert: (t: string) => void; onClose: () => void }) {
   const { t } = useI18n()
   const [cfg, setCfg] = useState<Cfg>(() => ({ ...DEFAULT, ...load<Partial<Cfg>>(CFG, {}) }))
-  const [keys, setKeys] = useState<Record<Id, string>>(() => ({ claude: getKey('claude'), agy: getKey('agy'), deepseek: getKey('deepseek') })) // kept in local storage (src/keys.ts)
+  const [keys, setKeys] = useState<Record<Id, string>>(() => ({ claude: getKey('claude'), agy: getKey('agy'), deepseek: getKey('deepseek'), nano: getKey('agy') })) // kept in local storage (src/keys.ts)
   const [chats, setChats] = useState<Chat[]>(() => load<Chat[]>(`desovault.chats.${project}`, []))
   const [activeId, setActiveId] = useState(() => chats[0]?.id ?? '')
   const [showCfg, setShowCfg] = useState(true) // settings are visible on entry
@@ -142,10 +147,11 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
   const end = useRef<HTMLDivElement>(null)
 
   useEffect(() => { save(CFG, cfg) }, [cfg])
-  useEffect(() => { save(`desovault.chats.${project}`, chats) }, [chats, project])
+  useEffect(() => { save(`desovault.chats.${project}`, chats.map((c) => ({ ...c, msgs: c.msgs.map(({ img, ...m }) => m) }))) }, [chats, project]) // pictures are too big for localStorage: they live in the image store
 
   const { id, modes, effort } = cfg
-  const a = AGENTS[id], mode: Mode = id === 'deepseek' ? 'api' : modes[id], key = keys[id]
+  const apiOnly = id === 'deepseek' || id === 'nano'
+  const a = AGENTS[id], mode: Mode = apiOnly ? 'api' : modes[id], key = keys[id]
   const [agyList, setAgyList] = useState<[string, string][]>([])
   useEffect(() => { if (inTauri) agyModels().then(setAgyList).catch(console.error) }, [])
   // `agy` in CLI mode: the models the installed CLI reports (its ids differ from the Gemini API's).
@@ -180,10 +186,16 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
     let reply: Msg
     try {
       if (!real) throw new Error(status)
-      const out = mode === 'cli'
-        ? await runAgentCli(a.cli, cliPrompt(system, history), model, effortFixed ? '' : EFFORTS[effort][0])
-        : await callApi(id, key, system, history, model, effort)
-      reply = { role: 'assistant', text: out.trim(), at: Date.now(), tin, tout: tokens(out) }
+      if (id === 'nano') { // a picture: the conversation so far is the prompt, no map
+        const r = await nanoImage(key, model, history.map((m) => ({ role: m.role, text: m.text })))
+        const iid = imgId(); putImg(iid, r.img)
+        reply = { role: 'assistant', text: r.text, img: r.img, imgId: iid, at: Date.now(), tin: r.input, tout: r.output }
+      } else {
+        const out = mode === 'cli'
+          ? await runAgentCli(a.cli, cliPrompt(system, history), model, effortFixed ? '' : EFFORTS[effort][0])
+          : await callApi(id, key, system, history, model, effort)
+        reply = { role: 'assistant', text: out.trim(), at: Date.now(), tin, tout: tokens(out) }
+      }
     } catch (e) {
       reply = { role: 'assistant', text: `Error: ${e instanceof Error ? e.message : e}`, at: Date.now(), error: true }
     }
@@ -235,7 +247,7 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
   }
   const label = 'text-micro text-dim'
   const icon = 'btn-press p-1.5 rounded-lg text-dim hover:text-fg hover:bg-panel'
-  const effortName = effortFixed || id === 'deepseek' ? '' : ` · ${t(EFFORTS[effort][0])}`
+  const effortName = effortFixed || apiOnly ? '' : ` · ${t(EFFORTS[effort][0])}`
 
   return (
     <aside className="anim-slide w-[26rem] shrink-0 border-l border-line bg-surface flex flex-col text-sm relative">
@@ -271,8 +283,8 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
       {showCfg && (
         <div className="anim-rise px-5 pt-3 pb-5 flex flex-col gap-3.5 border-b border-line">
           <div className="flex flex-col gap-1.5"><span className={label}>Agent</span><Segmented<Id> value={id} onChange={(k) => set({ id: k })} options={(Object.keys(AGENTS) as Id[]).map((k) => [k, AGENTS[k].label] as const)} /></div>
-          {id !== 'deepseek' && <div className="flex flex-col gap-1.5"><span className={label}>Mode</span><Segmented<Mode> value={mode} onChange={(m) => set({ modes: { ...modes, [id]: m } })} options={[['cli', t('modeCli')], ['api', t('modeApi')]]} /></div>}
-          {mode === 'api' && <input type="password" value={key} onChange={(e) => { setKey(id, e.target.value); setKeys((s) => ({ ...s, [id]: e.target.value })) }} placeholder={a.key}
+          {!apiOnly && <div className="flex flex-col gap-1.5"><span className={label}>Mode</span><Segmented<Mode> value={mode} onChange={(m) => set({ modes: { ...modes, [id]: m } })} options={[['cli', t('modeCli')], ['api', t('modeApi')]]} /></div>}
+          {mode === 'api' && <input type="password" value={key} onChange={(e) => { const v = e.target.value, shared = id === 'agy' || id === 'nano'; setKey(id === 'nano' ? 'agy' : id, v); setKeys((s) => ({ ...s, [id]: v, ...(shared && { agy: v, nano: v }) })) }} placeholder={a.key}
             className="px-3.5 py-2 rounded-xl bg-field border border-line focus:border-accent outline-none text-sm placeholder:text-dim" />}
           <label className="flex flex-col gap-1.5"><span className={label}>{t('model')}</span>
             <select value={model} onChange={(e) => set({ models: { ...cfg.models, [id]: e.target.value } })}
@@ -280,13 +292,13 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
               {list.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
           </label>
-          {id !== 'deepseek' && <div className="flex flex-col gap-1.5">
+          {!apiOnly && <div className="flex flex-col gap-1.5">
             <span className={label}>{t('reasoning')}</span>
             {effortFixed
               ? <p className="px-3.5 py-2.5 rounded-xl bg-field border border-line text-micro leading-relaxed text-dim">{t('effortInName')}</p>
               : <Segmented value={String(effort)} onChange={(v) => set({ effort: +v })} options={EFFORTS.map(([k], i) => [String(i), t(k)] as const)} />}
           </div>}
-          {id !== 'deepseek' && <Limits />}
+          {!apiOnly && <Limits />}
         </div>
       )}
 

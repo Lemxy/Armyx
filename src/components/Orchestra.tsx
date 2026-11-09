@@ -3,12 +3,15 @@ import { ArrowUp, FolderOpen, GitBranch, Play, Plus, Square, Trash2, X } from 'l
 import { useI18n } from '../i18n'
 import { agyModels, inTauri, openRoot, runAgent, stopAgents, worktreeApply, worktreeCreate, worktreeDiff, worktreeDiscard, worktreeStamp, type Answer } from '../vault'
 import Markdown from './Markdown'
+import StoredImg from './StoredImg'
 import { MODELS } from './AgentSidebar'
 import { graphMap, tokens, type Note } from '../deso'
 import type { MenuItem } from './ContextMenu'
 import { getKey } from '../keys'
 import { dsChat } from '../deepseek'
 import { dsUsage } from '../dsprice'
+import { nanoImage } from '../nano'
+import { getImg, imgId, putImg } from '../imgs'
 import { BRIEF, BUDGET, clip, leadChat, LOG_MAX, NOTE_MAX, READ_ONLY, runOrchestra, save, workerEffort, MAX_TURNS, type Agent, type Deps, type Entry, type Node, type Opts, type Orch, type Reply, type Row, type Use } from '../orchestra'
 
 const DEEPSEEK = MODELS.deepseek
@@ -27,6 +30,21 @@ const PRESETS: readonly Preset[] = [
   { ru: 'Поиск по карте и файлам', en: 'Search map & files', agent: 'claude', model: 'claude-haiku-5-5', tools: READ_ONLY },
   { ru: 'Поиск по карте и файлам', en: 'Search map & files', agent: 'deepseek', model: 'deepseek-v4-flash' },
   { ru: 'Картинки', en: 'Images', agent: 'nano', model: NANO[0][0] },
+]
+// Roles, picked with the + next to the model: the text fills the block's context (editable), review/tools are set with it.
+// A reviewer sends its work back to the blocks feeding it, up to `review` times, until it answers OK.
+type Role = { ru: string; en: string; ruText: string; enText: string; review?: number; tools?: string }
+const ROLES: readonly Role[] = [
+  { ru: 'Кодер', en: 'Coder', ruText: 'Ты кодер. Решай задачу, а не изображай работу. Меняй только нужные файлы, минимальный diff, проверь, что код запускается. Отвечай коротко.',
+    enText: 'You are the coder. Solve the task, do not pretend. Touch only the files you need, keep the diff minimal, check the code runs. Answer briefly.' },
+  { ru: 'Ревьюер', en: 'Reviewer', review: 2, tools: READ_ONLY, ruText: 'Ты ревьюер. Проверь результат предыдущего агента по задаче: баги, пропущенные случаи, сломанные вызовы. Сам код не переписывай.',
+    enText: 'You are the reviewer. Check the previous agent\'s result against the task: bugs, missed cases, broken callers. Do not rewrite the code yourself.' },
+  { ru: 'Исследователь', en: 'Researcher', tools: READ_ONLY, ruText: 'Ты исследователь. Найди в карте и файлах то, что нужно для задачи, ничего не меняй. В ответе только факты: пути, имена, строки.',
+    enText: 'You are the researcher. Find what the task needs in the map and files, change nothing. Answer with facts only: paths, names, lines.' },
+  { ru: 'Планировщик', en: 'Planner', tools: READ_ONLY, ruText: 'Ты планировщик. Разбей задачу на короткие шаги по файлам, без кода. Укажи порядок и риски.',
+    enText: 'You are the planner. Split the task into short steps by file, no code. Give the order and the risks.' },
+  { ru: 'Тестировщик', en: 'Tester', ruText: 'Ты тестировщик. Запусти тесты и сборку; при падении назови причину и файл. Код не чини.',
+    enText: 'You are the tester. Run the tests and the build; on a failure name the cause and the file. Do not fix the code.' },
 ]
 const k = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`)
 
@@ -61,7 +79,16 @@ export default function Orchestra({ notes, project, onMenu }: { notes: Note[]; p
   useEffect(() => { if (!o.nodes.some((n) => n.kind === 'start')) setOrchs((os) => os.map((x) => (x.id !== o.id || x.nodes.some((n) => n.kind === 'start') ? x : { ...x, nodes: [{ id: uid(), x: 40, y: 40, kind: 'start', agent: 'claude', model: MODELS.claude[0][0], text: '', notes: [] }, ...x.nodes] }))) }, [o.id, o.nodes])
   const upd = (f: (o: Orch) => Orch) => setOrchs((os) => os.map((x) => (x.id === o.id ? f(x) : x)))
   const log = o.log ?? []
-  const addLog = (e: Omit<Entry, 'at'>) => upd((c) => ({ ...c, log: [...(c.log ?? []), { ...e, at: Date.now() }].slice(-LOG_MAX) }))
+  const addLog = (e: Omit<Entry, 'at'>) => {
+    if (e.img) { e = { ...e, imgId: imgId() }; putImg(e.imgId!, e.img!) } // the picture goes to the image store, the log keeps its id
+    upd((c) => ({ ...c, log: [...(c.log ?? []), { ...e, at: Date.now() }].slice(-LOG_MAX) }))
+  }
+  const applyRole = (n: Node, r: Role | null) => {
+    if (!r) return patch(n.id, { role: undefined, review: undefined, tools: undefined })
+    const old = ROLES.flatMap((x) => [x.ruText, x.enText]).reduce((s, x) => s.replace(x, ''), n.text).trim() // swapping roles drops the previous role's text, keeps yours
+    const text = r[lang === 'ru' ? 'ruText' : 'enText']
+    patch(n.id, { role: r[lang], review: r.review, tools: r.tools, text: old ? `${text}\n\n${old}` : text })
+  }
   const patch = (id: string, p: Partial<Node>) => upd((c) => ({ ...c, nodes: c.nodes.map((n) => (n.id === id ? { ...n, ...p } : n)) }))
   const map = useMemo(() => graphMap(notes), [notes])
   const mapTok = useMemo(() => tokens(map), [map])
@@ -209,16 +236,8 @@ ${clip(d)}
     const key = getKey('agy') // the Gemini API key, shared with the chat sidebar
     if (!key) throw new Error(t('gemNoKey'))
     if (!prompt.trim()) throw new Error(t('orchNoInput'))
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseModalities: ['TEXT', 'IMAGE'] } }), signal: AbortSignal.timeout(120_000) })
-    const j = await r.json()
-    if (!r.ok) throw new Error(j.error?.message ?? r.statusText)
-    const parts = (j.candidates?.[0]?.content?.parts ?? []) as { text?: string; inlineData?: { mimeType: string; data: string } }[]
-    const im = parts.find((p) => p.inlineData)?.inlineData
-    const text = parts.map((p) => p.text ?? '').join('').trim()
-    if (!im) throw new Error(text || 'No image returned')
-    const u = j.usageMetadata ?? {}
-    return { text: text || '🖼', img: `data:${im.mimeType};base64,${im.data}`, input: u.promptTokenCount ?? 0, cached: 0, output: u.candidatesTokenCount ?? 0, cost: 0 }
+    const { text, img, input, output } = await nanoImage(key, model, [{ role: 'user', text: prompt }])
+    return { text, img, input, cached: 0, output, cost: 0 }
   }
 
   // A message from you to one agent (the lead or any block): it answers with its own context plus its share of the saved dialogue.
@@ -293,13 +312,16 @@ ${clip(d)}
                 {n.kind !== 'start' && <button title={t('delete')} onClick={() => remove(n.id)} className="p-1 rounded text-dim hover:text-status-err ml-auto"><X size={12} /></button>}
               </div>
               {n.kind !== 'rules' && <div className="flex items-center gap-1.5 px-5 py-1.5 border-b border-line min-w-0">
-                  <select value={`${n.agent ?? 'claude'}:${n.model ?? MODELS.claude[0][0]}`} onChange={(e) => { if (e.target.value.startsWith('preset:')) return patch(n.id, { ...resolve(PRESETS[+e.target.value.slice(7)]), role: PRESETS[+e.target.value.slice(7)][lang] }); const [agent, model] = e.target.value.split(':') as [Agent, string]; patch(n.id, { agent, model, role: undefined, tools: undefined, ...(agent !== 'claude' && { effort: undefined }) }) }}
+                  <select value={`${n.agent ?? 'claude'}:${n.model ?? MODELS.claude[0][0]}`} onChange={(e) => { if (e.target.value.startsWith('preset:')) return patch(n.id, { ...resolve(PRESETS[+e.target.value.slice(7)]), role: PRESETS[+e.target.value.slice(7)][lang], review: undefined }); const [agent, model] = e.target.value.split(':') as [Agent, string]; patch(n.id, { agent, model, role: undefined, tools: undefined, review: undefined, ...(agent !== 'claude' && { effort: undefined }) }) }}
                     className="min-w-0 bg-transparent text-micro outline-none text-mut">
                     <optgroup label={`★ ${lang === 'ru' ? 'Рекомендуемые' : 'Recommended'}`}>{PRESETS.map((p, i) => <option key={i} value={`preset:${i}`} className="bg-panel">{presetLabel(p)}</option>)}</optgroup>
                     {(['claude', 'agy', 'codex', 'deepseek', 'nano'] as const).map((a) => <optgroup key={a} label={NAMES[a]}>
                       {models(a).map(([v, l]) => <option key={v} value={`${a}:${v}`} disabled={a === 'codex'} className="bg-panel">{a === 'codex' ? 'Codex — Coming soon' : l}</option>)}</optgroup>)}
                   </select>
-                {n.role && <span className="text-micro text-accent truncate shrink-0 max-w-[45%]">· {n.role}</span>}
+                {n.role && <span className="text-micro text-accent truncate shrink-0 max-w-[45%]">· {n.role}{n.review ? ` ↻${n.review}` : ''}</span>}
+                {n.kind === 'model' && <button title={t('orchRole')} onClick={(e) => onMenu(e, [
+                  ...ROLES.map((r) => ({ label: r[lang], onClick: () => applyRole(n, r) })),
+                  { label: t('orchNoRole'), sep: true, onClick: () => applyRole(n, null) }])} className="btn-press ml-auto p-0.5 rounded text-dim hover:text-accent shrink-0"><Plus size={13} /></button>}
               </div>}
               {n.kind === 'model' && <span title={t('orchIn')} className={`${dot} -left-1.5 pointer-events-none`} />}
               <button title={t('orchOut')} onPointerDown={(e) => startWire(n.id, e)} className={`${dot} -right-1.5 cursor-crosshair`} />
@@ -308,8 +330,6 @@ ${clip(d)}
                   placeholder={n.kind === 'rules' ? t('orchRulesPh') : n.kind === 'start' ? t('orchStartPh') : t('orchCtxPh')} className={`${field} resize-none`} />
                 {n.kind !== 'rules' && (n.agent ?? 'claude') === 'claude' && <select value={n.effort ?? (n.kind === 'start' ? 'low' : '')} onChange={(e) => patch(n.id, { effort: e.target.value || undefined })} title={t('orchEffort')} className={field}>
                   {n.kind !== 'start' && <option value="">{t('orchEffort')}: auto</option>}{EFFORTS.map((x) => <option key={x} value={x}>{t('orchEffort')}: {x}</option>)}</select>}
-                {n.kind === 'model' && <select value={n.review ?? 0} onChange={(e) => patch(n.id, { review: +e.target.value || undefined })} title={t('orchReview')} className={field}>
-                  {[0, 1, 2, 3].map((x) => <option key={x} value={x}>{t('orchReview')}: {x ? x : t('orchOff')}</option>)}</select>}
                 {n.kind === 'start' && <span className="text-micro text-dim">{t('orchMapCtx', { n: notes.length, k: mapTok })}</span>}
                 {n.use && <span title={t('orchUseTip')} className="text-micro text-dim tabular-nums">{n.use.same ? t('orchSame') : `↑${k(n.use.input)} ⟳${k(n.use.cached)} ↓${k(n.use.output)}${n.use.cost > 0 ? ` · $${n.use.cost.toFixed(3)}` : ''}`}</span>}
                 {n.kind === 'start' && n.out && <pre className={`max-h-48 overflow-auto whitespace-pre-wrap text-micro p-2 rounded-lg bg-field ${n.state === 'err' ? 'text-status-err' : 'text-mut'}`}>{n.out}</pre>}
@@ -383,7 +403,7 @@ function Dialogue({ log, agents, busy, onStop, queue, onQueue, leadChat, onLeadC
               <span className="text-micro text-accent">{e.from}{e.to && ` → ${e.to}`} <span className="text-dim">· {hm(e.at)}</span></span>
               {e.kind === 'error' ? <p className="text-status-err whitespace-pre-wrap">{e.text}</p>
                 : e.kind === 'task' ? <p className="max-h-40 overflow-auto whitespace-pre-wrap px-3 py-2 rounded-xl bg-panel border border-line text-xs text-mut">{e.text}</p>
-                  : <><Markdown text={e.text} />{e.img && <img src={e.img} className="rounded-xl border border-line" />}</>}
+                  : <><Markdown text={e.text} /><StoredImg src={e.img} id={e.imgId} /></>}
             </div>)}
         {agents.filter((a) => a.state === 'run').map((a) => (
           <div key={a.id} className="anim-fade flex items-center gap-2 text-micro text-dim">
