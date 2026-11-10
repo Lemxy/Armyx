@@ -1,12 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useDebounced } from './debounce'
 import { Gauge, Network, PenLine, Settings, Sparkles, Workflow } from 'lucide-react'
-import { mapVsSource, savings, type Note } from './deso'
+import { mapVsSource, prop, savings, type Note } from './deso'
 import { backend, deleteNote, inTauri, loadNotes, onGraphChanged, rescanProject, saveNote, activeProject, switchProject, watchProject } from './vault'
 import { useI18n } from './i18n'
 import SettingsModal from './components/SettingsModal'
 import ProjectModal from './components/ProjectModal'
 import Sidebar from './components/Sidebar'
 import Editor from './components/Editor'
+import FileSplit from './components/SourceEditor'
 import CircuitGraph from './components/CircuitGraph'
 import TokenInspector from './components/TokenInspector'
 import ContextMenu, { type MenuItem, type MenuState } from './components/ContextMenu'
@@ -102,8 +104,10 @@ export default function App() {
   }
 
   const note = notes.find((n) => n.name === current)
-  const total = savings(notes.map((n) => n.content).join('\n'))
-  const scanned = mapVsSource(notes)
+  // Whole-project token stats are heavy on a big scan: compute them off the typing path, and only when the notes change.
+  const lazyNotes = useDebounced(notes)
+  const total = useMemo(() => savings(lazyNotes.map((n) => n.content).join('\n')), [lazyNotes])
+  const scanned = useMemo(() => mapVsSource(lazyNotes), [lazyNotes])
   const k = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n))
   const open = (n: string) => { setCurrent(n); setTab('editor') }
   const create = (n: string) => update(n, `# ${n}\n`)
@@ -143,7 +147,7 @@ export default function App() {
                 <p className="text-mut max-w-xs">{t('emptySub')}</p>
                 <button onClick={() => setCreating(true)} className="btn-press mt-2 px-5 py-2.5 rounded-full bg-accent text-bg text-sm font-medium hover:opacity-90">{t('createFirst')}</button>
               </div>)
-            : tab === 'editor' ? <Editor key={note.name} note={note} notes={notes} onChange={(c) => update(note.name, c)} />
+            : tab === 'editor' ? (inTauri && prop(note.content, 'path') ? <FileSplit key={note.name} note={note} notes={notes} onChange={(c) => update(note.name, c)} /> : <Editor key={note.name} note={note} notes={notes} onChange={(c) => update(note.name, c)} />)
             : <TokenInspector note={note} scanned={scanned} />}
         </div>
       </main>

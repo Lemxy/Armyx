@@ -12,7 +12,7 @@ describe('link marks', () => {
   })
   it('flags a graph from an older scanner', () => {
     expect(staleSchema([{ name: 'project-map', content: '# project-map\n' }])).toBe(true)
-    expect(staleSchema([{ name: 'project-map', content: '# project-map\n?schema: 2\n' }])).toBe(false)
+    expect(staleSchema([{ name: 'project-map', content: '# project-map\n?schema: 3\n' }])).toBe(false)
     expect(staleSchema([{ name: 'a', content: '# a\n' }])).toBe(false) // a hand-written vault has no project-map
   })
 })

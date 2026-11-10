@@ -27,6 +27,7 @@ struct Extract {
     exports: Vec<String>,
     raw_imports: Vec<Vec<String>>, // per import: the candidate paths in order; the first one that exists in the project is the link
     syms: Syms,
+    spans: Vec<(String, usize, usize)>, // named function / class -> its first and last line (1-based)
     idents: HashSet<String>, // identifiers of 5+ characters used in the file, for the symbol edges
 }
 
@@ -196,9 +197,52 @@ fn route_key(r: &str) -> String {
     r[..end].trim_end_matches('/').to_string()
 }
 
+fn is_js(ext: &str) -> bool { matches!(ext, "ts" | "tsx" | "js" | "jsx" | "mjs" | "cjs") }
+
+/// The function / class / method a (trimmed) line defines, if any.
+fn def_name(ext: &str, t: &str) -> Option<String> {
+    let n = match ext {
+        "py" => t.strip_prefix("async ").unwrap_or(t).strip_prefix("def ").or_else(|| t.strip_prefix("class ")),
+        "rs" => t.find("fn ").filter(|i| *i == 0 || t[..*i].ends_with(' ')).map(|i| &t[i + 3..]),
+        _ if is_js(ext) => t.trim_start_matches("export ").trim_start_matches("default ").trim_start_matches("async ").strip_prefix("function ").or_else(|| t.trim_start_matches("export ").strip_prefix("class ")),
+        _ => None,
+    };
+    n.map(ident).filter(|n| n.len() > 3 && !n.starts_with("__"))
+}
+
+const SPAN_FILE: usize = 60; // a shorter file is cheap to read whole
+const SPAN_MIN: usize = 5; // a shorter definition is found by its name just as well
+const MAX_SPANS: usize = 40;
+
+/// Where each named function / class (and exported JS constant) starts and ends, so an agent reads that range instead of the file.
+/// The end is a guess by indentation: the block runs until a line indented no deeper than its first one; a closing bracket there
+/// still belongs to it, and `) -> T {` or `} else {` carry it on.
+fn spans(ext: &str, src: &str) -> Vec<(String, usize, usize)> {
+    let lines: Vec<&str> = src.lines().collect();
+    let mut out = vec![];
+    if lines.len() < SPAN_FILE { return out }
+    let indent = |l: &str| l.len() - l.trim_start().len();
+    for (i, raw) in lines.iter().enumerate() {
+        let t = raw.trim();
+        let js_const = || t.strip_prefix("export const ").or_else(|| t.strip_prefix("export let ")).filter(|_| is_js(ext)).map(ident).filter(|n| !n.is_empty());
+        let Some(name) = def_name(ext, t).or_else(js_const) else { continue };
+        let (k, mut end) = (indent(raw), i);
+        for (j, l) in lines.iter().enumerate().skip(i + 1) {
+            let lt = l.trim();
+            if lt.is_empty() { continue }
+            if indent(l) > k { end = j; continue }
+            if !lt.starts_with(['}', ')', ']']) { break }
+            end = j;
+            if !(lt.ends_with(['{', '(', '[', ',', ':']) || lt.ends_with("=>")) { break }
+        }
+        if end - i + 1 >= SPAN_MIN && out.len() < MAX_SPANS && !out.iter().any(|(n, _, _)| *n == name) { out.push((name, i + 1, end + 1)) }
+    }
+    out
+}
+
 fn syms(ext: &str, src: &str) -> Syms {
     let mut y = Syms::default();
-    let js = matches!(ext, "ts" | "tsx" | "js" | "jsx" | "mjs" | "cjs");
+    let js = is_js(ext);
     let mut after_cmd = false;
     for raw in src.lines() {
         let t = raw.trim();
@@ -212,13 +256,7 @@ fn syms(ext: &str, src: &str) -> Syms {
             after_cmd = t.starts_with("#[tauri::command") || (after_cmd && t.starts_with("#["));
         }
         // every named function / class / method, so a question about a small helper still finds its file
-        let named = match ext {
-            "py" => t.strip_prefix("async ").unwrap_or(t).strip_prefix("def ").or_else(|| t.strip_prefix("class ")),
-            "rs" => t.find("fn ").filter(|i| *i == 0 || t[..*i].ends_with(' ')).map(|i| &t[i + 3..]),
-            _ if js => t.trim_start_matches("export ").trim_start_matches("default ").trim_start_matches("async ").strip_prefix("function ").or_else(|| t.trim_start_matches("export ").strip_prefix("class ")),
-            _ => None,
-        };
-        if let Some(n) = named { let n = ident(n); if n.len() > 3 && !n.starts_with("__") { push(&mut y.other, n) } }
+        if let Some(n) = def_name(ext, t) { push(&mut y.other, n) }
         if js || ext == "rs" {
             let rest = t.trim_start_matches("export ").trim_start_matches("pub(crate) ").trim_start_matches("pub ");
             if let Some(n) = rest.strip_prefix("const ").or_else(|| rest.strip_prefix("static ")) { let n = ident(n); if all_caps(&n) { push(&mut y.other, n) } }
@@ -256,7 +294,7 @@ fn clean(s: &str) -> String { s.replace('\n', " ").trim().to_string() }
 
 /// Returns `(note name, content)` pairs. Empty when the folder has nothing indexable.
 /// Note format version: bump when a property changes meaning, so a stale graph can be told from a current one.
-pub const SCHEMA: u32 = 2; // 2: `~` before a file in ?calls / ?callers marks a link guessed by symbol name
+pub const SCHEMA: u32 = 3; // 2: `~` before a file in ?calls / ?callers marks a link guessed by symbol name; 3: ?spans (line ranges of definitions)
 
 /// The first candidate of each import that is a file of the project (a link to a file outside the set is dropped).
 fn resolve(raw: &[Vec<String>], all: &HashSet<String>) -> Vec<String> {
@@ -298,7 +336,7 @@ pub fn scan(root: &Path) -> Vec<(String, String)> {
 impl Scanner {
     fn extract(r: &str, ext: &str, src: &str) -> Extract {
         let (about, exports, raw_imports) = parse(r, ext, src);
-        Extract { ext: ext.to_string(), lines: src.lines().count(), bytes: src.len(), about, doc: doc_text(ext, src), exports, raw_imports, syms: syms(ext, src), idents: ident_set(src) }
+        Extract { ext: ext.to_string(), lines: src.lines().count(), bytes: src.len(), about, doc: doc_text(ext, src), exports, raw_imports, syms: syms(ext, src), spans: spans(ext, src), idents: ident_set(src) }
     }
 
     pub fn scan(&mut self, root: &Path) -> Vec<(String, String)> {
@@ -405,6 +443,7 @@ impl Scanner {
         if !f.x.exports.is_empty() { s += &format!("?exports: {}\n", f.x.exports.join(", ")) }
         let sy: Vec<&str> = f.x.syms.routes.iter().chain(&f.x.syms.cmds).chain(&f.x.syms.other).map(|x| x.as_str()).take(60).collect();
         if !sy.is_empty() { s += &format!("?symbols: {}\n", sy.join(", ")) }
+        if !f.x.spans.is_empty() { s += &format!("?spans: {}\n", f.x.spans.iter().map(|(n, a, b)| format!("{n}:{a}-{b}")).collect::<Vec<_>>().join(", ")) }
         let tag: String = top.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
         s += &format!("#{}", if f.x.ext.is_empty() { "file" } else { &f.x.ext });
         if tag.chars().next().is_some_and(|c| c.is_ascii_alphabetic()) { s += &format!(" #{tag}") }
@@ -517,6 +556,16 @@ pub async fn auth_pay() {
         assert!(get("app-src-tauri-auth-rs").contains("->@server-pay-js"));
         assert!(get("app-src-page-tsx").contains("->@app-src-tauri-auth-rs"));
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn spans_give_the_lines_of_each_definition() {
+        let pad = "// filler\n".repeat(60);
+        let ts = format!("export const pick = (\n  a: number,\n) => {{\n  const b = a\n  return b\n}}\nexport const one = 1\nfunction helperTwo() {{\n  if (x) {{\n    y()\n  }} else {{\n    z()\n  }}\n}}\n{pad}");
+        assert_eq!(spans("ts", &ts), vec![("pick".to_string(), 1, 6), ("helperTwo".to_string(), 8, 14)]);
+        let py = format!("class Shop:\n    def checkout(\n        self,\n    ) -> int:\n        a = 1\n\n        return a\n\n    def tiny(self):\n        pass\n\ndef after_it():\n    pass\n{}", "# filler\n".repeat(60));
+        assert_eq!(spans("py", &py), vec![("Shop".to_string(), 1, 10), ("checkout".to_string(), 2, 7)]);
+        assert!(spans("ts", "export function shortFile() {\n  a()\n  b()\n  c()\n}\n").is_empty(), "a short file is read whole");
     }
 
     #[test]

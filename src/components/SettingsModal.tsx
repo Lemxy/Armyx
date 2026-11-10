@@ -7,7 +7,7 @@ import { getKey, setKey } from '../keys'
 const label = 'text-micro text-dim'
 
 export default function SettingsModal({ onClose }: { onClose: () => void }) {
-  const { t, lang, setLang, smooth, setSmooth } = useI18n()
+  const { t, lang, setLang, smooth, setSmooth, hideOut, setHideOut } = useI18n()
   const [theme, setTheme] = useState(document.documentElement.dataset.theme ?? 'steel')
   const pick = (v: string) => { document.documentElement.dataset.theme = v; localStorage.setItem('deso_theme', v); setTheme(v) }
   return (
@@ -38,6 +38,15 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
         </span>
         <span className={`relative w-10 h-6 rounded-full shrink-0 border ${smooth ? 'border-accent bg-accent-dim' : 'border-line bg-field'}`}>
           <span data-ease className={`absolute top-[3px] left-[3px] w-4 h-4 rounded-full ${smooth ? 'translate-x-4 bg-accent' : 'bg-dim'}`} />
+        </span>
+      </button>
+      <button role="switch" aria-checked={hideOut} onClick={() => setHideOut(!hideOut)} className="flex items-center gap-4 text-left pt-1">
+        <span className="flex-1">
+          <span className="block text-sm">{t('hideOut')}</span>
+          <span className="block text-micro text-dim mt-0.5">{t('hideOutDesc')}</span>
+        </span>
+        <span className={`relative w-10 h-6 rounded-full shrink-0 border ${hideOut ? 'border-accent bg-accent-dim' : 'border-line bg-field'}`}>
+          <span data-ease className={`absolute top-[3px] left-[3px] w-4 h-4 rounded-full ${hideOut ? 'translate-x-4 bg-accent' : 'bg-dim'}`} />
         </span>
       </button>
     </Modal>

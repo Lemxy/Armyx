@@ -73,12 +73,12 @@ export async function deleteNote(name: string, rest: Note[]) {
   else localStorage.setItem(store(activeProject()), JSON.stringify(rest))
 }
 
-export type Answer = { text: string; input: number; cached: number; output: number; cost: number }
+export type Answer = { text: string; input: number; cached: number; output: number; cost: number; files?: string[]; wide?: boolean } // files = project files the agent opened (claude only); wide = it also searched, wrote or ran commands
 export type AgentOpts = { session?: string; resume?: boolean; tools?: string; system?: string; budget?: number; maxTurns?: number; worktree?: string }
 export const runAgent = (cli: string, prompt: string, model: string, effort: string, opts: AgentOpts = {}) => call<Answer>('run_agent', { cli, prompt, model, effort, ...opts })
-export const runAgentCli = (cli: string, prompt: string, model: string, effort: string) => runAgent(cli, prompt, model, effort).then((a) => a.text)
 // Isolated runs: agents work in a git worktree (id = the orchestra id) until you apply or discard what they changed.
 export const worktreeStamp = (worktree?: string) => call<string>('project_stamp', { worktree })
+export const filesStamp = (paths: string[], worktree?: string) => call<string>('files_stamp', { paths, worktree })
 export const worktreeCreate = (id: string) => call<string>('worktree_create', { id })
 export const worktreeDiff = (id: string) => call<string>('worktree_diff', { id })
 export const worktreeApply = (id: string) => call<boolean>('worktree_apply', { id })
@@ -121,3 +121,9 @@ export const onGraphChanged = (cb: () => void) => (inTauri ? listen('graph-chang
 
 /** Desktop only: regenerate the scanned part of the graph; hand-written notes are kept. */
 export const rescanProject = () => call<number>('index_project', { force: true })
+
+// The project file a scanned note stands for, edited in place (desktop only; the backend keeps the path inside the project folder).
+export const readSource = (path: string) => call<string>('read_source', { path })
+export const saveSource = (path: string, content: string) => call<void>('save_source', { path, content })
+export const imagePath = (name: string, ext: string) => call<string>('image_path', { name, ext })
+export const readImage = (name: string, ext: string) => call<number[]>('read_image', { name, ext })

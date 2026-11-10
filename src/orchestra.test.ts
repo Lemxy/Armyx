@@ -1,5 +1,5 @@
 import { expect, test, vi } from 'vitest'
-import { fromTemplate, isWriter, leadChat, RETRIES, retry, RUN_CAP, RUN_TOKEN_CAP, runOrchestra, save, section, slim, type Deps, type Entry, type Node, type Opts, type Orch } from './orchestra'
+import { fromTemplate, isWriter, LEAD_TURNS, leadChat, READ_ONLY, RETRIES, retry, RUN_CAP, RUN_TOKEN_CAP, runOrchestra, save, section, slim, type Deps, type Entry, type Node, type Opts, type Orch } from './orchestra'
 import { dsUsage } from './dsprice'
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -17,7 +17,7 @@ function rig(o: Orch, exec: (n: Node, prompt: string, opts: Opts) => Promise<Ret
     exec: (n, build, opts) => { const prompt = build(false); calls.push({ id: n.id, prompt, opts }); return exec(n, prompt, opts) },
     patch: (id, p) => { Object.assign(nodes.get(id)!, p) },
     addLog: (e) => { log.push({ ...e, at: 0 }) },
-    stamp: async () => '', stopped: () => false, history: () => '', embed: () => '', leadMap: () => 'MAP',
+    stamp: async () => '', stopped: () => false, history: () => '', embed: () => '', leadMap: () => 'MAP', subMap: () => '', filesStamp: async () => '',
     label: (n) => n.id, who: (n) => n.id, t: (k, v) => (v ? `${k}${JSON.stringify(v)}` : k),
     ...over,
   }
@@ -115,11 +115,27 @@ test('the final report is written only when there are sinks', async () => {
   expect(r2.calls[2].opts.tools).toBe('')
 })
 
+test('the briefing lead may read files but not write, within a few turns', async () => {
+  const o = orch([node('A')], [['L', 'A']])
+  const r = rig(o, async (n) => lead(n))
+  await runOrchestra(o, r.d)
+  expect(r.calls[0].opts).toMatchObject({ tools: READ_ONLY, maxTurns: LEAD_TURNS })
+})
+
+test('a tool call written out as text is an error: not passed on, not reused', async () => {
+  const o = orch([node('A')], [['L', 'A']])
+  const junk = '<invoke name="Read">\n<parameter name="file_path">RULES.md</parameter>\n</invoke>'
+  const r = rig(o, async (n) => (n.id === 'L' ? ans(junk) : ans('out A')))
+  await runOrchestra(o, r.d)
+  expect(r.ids()).toEqual(['L'])  // A never got the junk as its brief
+  expect(r.nodes.get('L')).toMatchObject({ state: 'err', out: 'orchToolText' })
+})
+
 test('two writing blocks never run at once, two read-only blocks do', async () => {
   const peak = async (extra: Partial<Node>) => {
     let now = 0, max = 0
     const o = orch([node('A', { agent: 'claude', ...extra }), node('B', { agent: 'claude', ...extra })], [['L', 'A'], ['L', 'B']])
-    const r = rig(o, async (n, _p, opts) => { if (n.id !== 'L') { max = Math.max(max, ++now); await sleep(15); now-- } return lead(n, opts.tools === '' ? BRIEFING : '') })
+    const r = rig(o, async (n, _p, opts) => { if (n.id !== 'L') { max = Math.max(max, ++now); await sleep(15); now-- } return lead(n, opts.tools === READ_ONLY ? BRIEFING : '') })
     await runOrchestra(o, r.d)
     return max
   }
@@ -234,6 +250,17 @@ test('run one block again: it and what follows it rerun, the rest comes from the
   expect(r2.nodes.get('C')?.use?.same).toBe(true)
 })
 
+test('run one block again: a changed project state does not rerun the blocks outside it', async () => {
+  const o1 = orch([node('A'), node('B')], [['L', 'A'], ['L', 'B']])
+  const r1 = rig(o1, async (n) => lead(n))
+  await runOrchestra(o1, r1.d)
+  const o2 = { ...o1, nodes: [...r1.nodes.values()] }
+  const r2 = rig(o2, async (n) => lead(n))
+  r2.d.stamp = async () => 'changed'
+  await runOrchestra(o2, r2.d, { only: 'A' })
+  expect(r2.ids()).toEqual(['A'])
+})
+
 test('a conditional link passes only on OK (or only when not OK), and what follows is left out', async () => {
   const ids = async (says: string, cond: 'ok' | 'bad') => {
     const o = orch([node('A'), node('B'), node('C')], [['L', 'A'], ['A', 'B'], ['B', 'C']], { cond: { 'A>B': cond } })
@@ -278,4 +305,80 @@ test('a template becomes a fresh orchestra: new ids, links and conditions follow
   expect(c.cond).toEqual({ 'n1>n2': 'ok' })
   expect(c.nodes.every((x) => x.out === undefined && x.sum === undefined && x.sid === undefined && x.state === undefined)).toBe(true)
   expect(tpl.nodes[0].out).toBe('old') // the template itself is untouched
+})
+
+test('attaching a picture to a block makes it run again instead of reusing its old answer', async () => {
+  const o1 = orch([node('A'), node('B')], [['L', 'A'], ['L', 'B']])
+  const r1 = rig(o1, async (n) => lead(n))
+  await runOrchestra(o1, r1.d)
+  const o2 = { ...o1, nodes: [...r1.nodes.values()].map((n) => (n.id === 'A' ? { ...n, images: ['pic1'] } : n)) }
+  const r2 = rig(o2, async (n) => lead(n))
+  await runOrchestra(o2, r2.d)
+  expect(r2.ids()).toEqual(['A']) // B and the lead come from the cache
+})
+
+test('a message to the lead reruns only the agents it concerns; the others keep their answers', async () => {
+  const o1 = orch([node('A', { agent: 'nano' }), node('B')], [['L', 'A'], ['L', 'B']])
+  const r1 = rig(o1, async (n) => (n.id === 'A' ? ans('drawn', { img: 'png' }) : lead(n)))
+  await runOrchestra(o1, r1.d)
+  const o2 = { ...o1, nodes: [...r1.nodes.values()] }
+  // the lead briefs only B: A keeps its old brief, so it is not asked again
+  const r2 = rig(o2, async (n) => (n.id === 'L' ? ans('### B\nfix the coder part') : ans(`new ${n.id}`)))
+  await runOrchestra(o2, r2.d, { msg: 'the coder broke it' })
+  expect(r2.ids()).toContain('B')
+  expect(r2.ids()).not.toContain('A')
+  expect(r2.nodes.get('A')?.use?.same).toBe(true)
+  // a plain answer with no sections runs nobody
+  const o3 = { ...o1, nodes: [...r1.nodes.values()] }
+  const r3 = rig(o3, async (n) => (n.id === 'L' ? ans('ok, done') : ans(`new ${n.id}`)))
+  await runOrchestra(o3, r3.d, { msg: 'looks good' })
+  expect(r3.ids().filter((id) => id !== 'L')).toEqual([])
+})
+
+test('a reading block that only opened some files is reused until one of those files changes', async () => {
+  const o1 = orch([node('A', { agent: 'claude', tools: READ_ONLY })], [['L', 'A']])
+  let project = 'p1', files = 'f1'
+  const over = { stamp: async () => project, filesStamp: async () => files }
+  const exec = async (n: Node) => (n.id === 'A' ? ans('out A', { files: ['src/a.ts'], wide: false }) : lead(n))
+  const r1 = rig(o1, exec, over)
+  await runOrchestra(o1, r1.d)
+  expect(r1.nodes.get('A')?.read).toEqual(['src/a.ts'])
+  expect(r1.nodes.get('A')?.use).not.toHaveProperty('files') // not for the usage table
+  project = 'p2' // something else in the project changed: the lead looks again, A's files are as they were
+  const o2 = { ...o1, nodes: [...r1.nodes.values()] }
+  const r2 = rig(o2, exec, over)
+  await runOrchestra(o2, r2.d)
+  expect(r2.ids()).toEqual(['L'])
+  expect(r2.nodes.get('A')?.use?.same).toBe(true)
+  project = 'p3'; files = 'f2' // now a file it read changed
+  const o3 = { ...o2, nodes: [...r2.nodes.values()] }
+  const r3 = rig(o3, exec, over)
+  await runOrchestra(o3, r3.d)
+  expect(r3.ids()).toContain('A')
+})
+
+test('a block that searched, or ran while the project changed, depends on the whole project', async () => {
+  const o = orch([node('A', { agent: 'claude', tools: READ_ONLY })], [['L', 'A']])
+  const wide = rig(o, async (n) => (n.id === 'A' ? ans('out A', { files: ['src/a.ts'], wide: true }) : lead(n)), { stamp: async () => 'p', filesStamp: async () => 'f' })
+  await runOrchestra(o, wide.d)
+  expect(wide.nodes.get('A')?.read).toBeUndefined()
+  let tick = 0
+  const moved = rig(o, async (n) => (n.id === 'A' ? ans('out A', { files: ['src/a.ts'], wide: false }) : lead(n)), { stamp: async () => `p${tick++}`, filesStamp: async () => 'f' })
+  await runOrchestra(o, moved.d)
+  expect(moved.nodes.get('A')?.read).toBeUndefined()
+})
+
+test('a worker gets the files its brief names; their line numbers are not part of its cache key', async () => {
+  const o1 = orch([node('A', { agent: 'claude' })], [['L', 'A']])
+  let files = 'src/a.ts {pick@1-6}'
+  const over = { subMap: () => files }
+  const r1 = rig(o1, async (n) => lead(n), over)
+  await runOrchestra(o1, r1.d)
+  expect(r1.calls.find((c) => c.id === 'A')!.prompt).toContain('# Files\n')
+  expect(r1.calls.find((c) => c.id === 'A')!.prompt).toContain('src/a.ts {pick@1-6}')
+  files = 'src/a.ts {pick@3-8}' // an edit moved the lines
+  const o2 = { ...o1, nodes: [...r1.nodes.values()] }
+  const r2 = rig(o2, async (n) => lead(n), over)
+  await runOrchestra(o2, r2.d)
+  expect(r2.calls).toHaveLength(0)
 })

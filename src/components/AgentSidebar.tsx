@@ -1,19 +1,22 @@
-import { useEffect, useRef, useState } from 'react'
-import { ArrowUp, Check, ChevronDown, Clock, Copy, CornerDownLeft, FolderOpen, Plus, Sparkles, Trash2, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useDebounced } from '../debounce'
+import { ArrowUp, Check, ChevronDown, Clock, Copy, CornerDownLeft, FolderOpen, Paperclip, Plus, Sparkles, Trash2, X } from 'lucide-react'
 import Segmented from './Segmented'
 import Markdown from './Markdown'
 import { useI18n } from '../i18n'
-import { graphMap, MAP_INTRO, tokens, type Note } from '../deso'
+import { graphMap, MAP_INTRO, sure, tokens, topHits, type Note } from '../deso'
+import { mapOpts, recordRead } from '../mapmem'
 import { getKey, setKey } from '../keys'
 import { dsChat } from '../deepseek'
-import { nanoImage } from '../nano'
+import { nanoAgy, nanoImage } from '../nano'
 import { getImg, imgId, putImg } from '../imgs'
 import StoredImg from './StoredImg'
-import { agyModels, agyUsage, claudeUsage, inTauri, openRoot, runAgentCli, saveImage } from '../vault'
+import { picPath, readPics } from '../pics'
+import { agyModels, agyUsage, claudeUsage, inTauri, openRoot, runAgent, saveImage } from '../vault'
 
 type Id = 'claude' | 'agy' | 'deepseek' | 'nano'
 type Mode = 'cli' | 'api'
-type Msg = { role: 'user' | 'assistant'; text: string; at: number; error?: boolean; tin?: number; tout?: number; img?: string; imgId?: string } // img = a generated picture; only imgId is saved (src/imgs.ts)
+type Msg = { role: 'user' | 'assistant'; text: string; at: number; error?: boolean; tin?: number; tout?: number; img?: string; imgId?: string; pics?: string[]; via?: string } // img = a generated picture; only imgId is saved (src/imgs.ts). pics = ids of pictures you attached
 type Chat = { id: string; title: string; msgs: Msg[]; at: number }
 
 const AGENTS = {
@@ -30,6 +33,8 @@ export const MODELS = {
   nano: [['gemini-2.5-flash-image', 'Nano Banana'], ['gemini-3-pro-image-preview', 'Nano Banana Pro']], // image models: the orchestra and the chat
   deepseek: [['deepseek-v4-flash', 'DeepSeek V4 Flash'], ['deepseek-v4-pro', 'DeepSeek V4 Pro'], ['deepseek-chat', 'DeepSeek V3 (chat)'], ['deepseek-reasoner', 'DeepSeek R1 (reasoner)']],
 } as const
+// Where a simple lookup goes when "cheap model for simple lookups" is on.
+const CHEAP = { claude: MODELS.claude[2][0], agy: MODELS.agy[1][0], deepseek: MODELS.deepseek[0][0] } as const
 // [level, Gemini thinking budget]
 const EFFORTS = [['low', 1024], ['medium', 4096], ['high', 16384], ['max', 32768]] as const
 
@@ -46,7 +51,11 @@ const trim = (msgs: Msg[]) => {
   return out
 }
 
-async function callApi(id: Id, key: string, system: string, msgs: Msg[], model: string, effort: number): Promise<string> {
+const mime = (d: string) => d.slice(5, d.indexOf(';'))
+const b64 = (d: string) => d.split(',')[1]
+
+async function callApi(id: Id, key: string, system: string, msgs: Msg[], model: string, effort: number, pics: Map<string, string>): Promise<string> {
+  const have = (m: Msg) => (m.pics ?? []).filter((i) => pics.has(i))
   const [level, budget] = EFFORTS[effort]
   if (id === 'claude') {
     // Claude 5.x: adaptive thinking + effort; budget_tokens is rejected with a 400. The graph map is cached between turns.
@@ -55,7 +64,7 @@ async function callApi(id: Id, key: string, system: string, msgs: Msg[], model: 
       headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
       body: JSON.stringify({ model, max_tokens: 16000, thinking: { type: 'adaptive' }, output_config: { effort: level },
         system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
-        messages: msgs.map((m) => ({ role: m.role, content: m.text })) }),
+        messages: msgs.map((m) => ({ role: m.role, content: have(m).length ? [...have(m).map((i) => ({ type: 'image', source: { type: 'base64', media_type: mime(pics.get(i)!), data: b64(pics.get(i)!) } })), { type: 'text', text: m.text }] : m.text })) }),
     })
     const j = await r.json()
     if (!r.ok) throw new Error(j.error?.message ?? r.statusText)
@@ -68,7 +77,7 @@ async function callApi(id: Id, key: string, system: string, msgs: Msg[], model: 
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
     body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] },
-      contents: msgs.map((m) => ({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.text }] })),
+      contents: msgs.map((m) => ({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.text }, ...have(m).map((i) => ({ inlineData: { mimeType: mime(pics.get(i)!), data: b64(pics.get(i)!) } }))] })),
       generationConfig: { thinkingConfig: { thinkingBudget: budget } } }),
   })
   const j = await r.json()
@@ -77,14 +86,14 @@ async function callApi(id: Id, key: string, system: string, msgs: Msg[], model: 
 }
 
 /** The CLIs are single-shot, so the saved conversation is replayed inside the prompt. */
-const cliPrompt = (system: string, msgs: Msg[]) =>
-  `${system}\n\n# Conversation\n` + msgs.map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.text}`).join('\n\n') + '\n\nAssistant:'
+const cliPrompt = (system: string, msgs: Msg[], paths: Map<string, string>, hits: string) =>
+  `${system}\n\n# Conversation\n` + msgs.map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.text}${(m.pics ?? []).filter((i) => paths.has(i)).map((i) => ` [Image: ${paths.get(i)}]`).join('')}`).join('\n\n') + (hits && `\n\n# Best matches for the last message\n${hits}`) + '\n\nAssistant:'
 
 // ---- persistence: settings are global, chats are per project ----
 const load = <T,>(k: string, d: T): T => { try { return JSON.parse(localStorage.getItem(k) ?? '') as T } catch { return d } }
 const save = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.stringify(v)) } catch (e) { console.error(e) } }
 const CFG = 'desovault.agent'
-type Cfg = { id: Id; models: Record<Id, string>; modes: Record<Id, Mode>; effort: number }
+type Cfg = { id: Id; models: Record<Id, string>; modes: Record<Id, Mode>; effort: number; auto?: boolean }
 type Row = { title?: string; k: 'usage5h' | 'usage7d'; pct: number; reset: string }
 const DEFAULT: Cfg = { id: 'claude', models: { claude: MODELS.claude[0][0], agy: MODELS.agy[0][0], deepseek: MODELS.deepseek[0][0], nano: MODELS.nano[0][0] }, modes: { claude: inTauri ? 'cli' : 'api', agy: inTauri ? 'cli' : 'api', deepseek: 'api', nano: 'api' }, effort: 1 }
 const uid = () => Math.random().toString(36).slice(2, 10)
@@ -119,7 +128,7 @@ function Assistant({ label, m, fresh, canInsert, onInsert, onInsertImage, onTick
             className="flex items-center gap-1 px-2 py-1 rounded-md hover:text-fg hover:bg-panel">{copied ? <Check size={12} /> : <Copy size={12} />}{t('copy')}</button>
           <button onClick={onInsert} disabled={!canInsert} className="flex items-center gap-1 px-2 py-1 rounded-md hover:text-fg hover:bg-panel disabled:opacity-40"><CornerDownLeft size={12} />{t('insert')}</button>
           {(m.img || m.imgId) && <button onClick={onInsertImage} disabled={!canInsert || !inTauri} title={inTauri ? undefined : t('desktopOnly')} className="flex items-center gap-1 px-2 py-1 rounded-md hover:text-fg hover:bg-panel disabled:opacity-40"><CornerDownLeft size={12} />{t('insertImage')}</button>}
-          {m.tin != null && <span className="ml-auto">{m.tin} {t('tokIn')} · {m.tout} {t('tokOut')}</span>}
+          {m.tin != null && <span className="ml-auto">{m.via && `${m.via} · `}{m.tin} {t('tokIn')} · {m.tout} {t('tokOut')}</span>}
         </div>
       )}
     </div>
@@ -144,6 +153,7 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
   const [showHist, setShowHist] = useState(false)
   const [prompt, setPrompt] = useState('')
   const [busy, setBusy] = useState(false)
+  const [pending, setPending] = useState<{ id: string; data: string }[]>([]) // pictures attached to the message being written
   const [freshAt, setFreshAt] = useState(0)
   const end = useRef<HTMLDivElement>(null)
 
@@ -161,10 +171,13 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
   const model = list.some((m) => m[0] === cfg.models[id]) ? cfg.models[id] : list[0][0]
   // `agy --effort` conflicts with --model, so there effort is part of the model name (…-high).
   const effortFixed = id === 'agy' && mode === 'cli'
-  const real = mode === 'cli' ? inTauri : !!key
+  const real = mode === 'cli' ? inTauri : !!key || (id === 'nano' && inTauri) // Nano Banana without a key is drawn by the Antigravity CLI
+  // Claude is routed in CLI mode only (Haiku is called there without an effort level); the CLI's own agy list has no known cheap entry.
+  const routable = id === 'claude' ? mode === 'cli' : id !== 'nano' && !fromCli
   const status = t(real ? (mode === 'cli' ? 'online' : 'ready') : mode === 'cli' ? 'simBrowser' : 'simKey')
 
-  const map = graphMap(notes)
+  const slowNotes = useDebounced(notes) // note edits settle before the map is rebuilt
+  const map = useMemo(() => graphMap(slowNotes, undefined, '', mapOpts(slowNotes)), [slowNotes]) // was recomputed on every keystroke in the chat box
   const chat = chats.find((c) => c.id === activeId)
   const msgs = chat?.msgs ?? []
   const set = (p: Partial<Cfg>) => setCfg((c) => ({ ...c, ...p }))
@@ -175,30 +188,43 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
   const send = async () => {
     const text = prompt.trim()
     if (!text || busy) return
-    const user: Msg = { role: 'user', text, at: Date.now() }
+    if (text === '/clear') { newChat(); setPending([]); return } // a fresh conversation; the old one stays in the history
+    const user: Msg = { role: 'user', text, at: Date.now(), pics: pending.length ? pending.map((p) => p.id) : undefined }
     let cid = activeId
     if (!chat) { cid = uid(); setChats((cs) => [{ id: cid, title: text.slice(0, 48), msgs: [user], at: Date.now() }, ...cs]); setActiveId(cid) }
     else patch(cid, (c) => ({ ...c, msgs: [...c.msgs, user], at: Date.now() }))
-    setPrompt(''); setBusy(true)
+    setPrompt(''); setPending([]); setBusy(true)
     // the map stays identical between questions, so the provider's prompt cache can reuse it
     const history = trim([...msgs, user])
     const system = SYSTEM(map)
     const tin = tokens(system + history.map((m) => m.text).join('\n'))
     let reply: Msg
+    // A short lookup the map answers with confidence (one file far ahead of the rest) does not need the big model.
+    const easy = !!cfg.auto && routable && !user.pics && text.length <= 200 && sure(notes, text)
+    const useModel = easy ? CHEAP[id as keyof typeof CHEAP] : model, level = EFFORTS[easy ? 0 : effort][0]
     try {
       if (!real) throw new Error(status)
+      if (id === 'deepseek' && user.pics) throw new Error(t('noImagesDs'))
+      // the newest 4 pictures of the conversation go along: as data for the APIs, as files on disk for the CLIs
+      const pics = new Map<string, string>(), paths = new Map<string, string>()
+      for (const i of history.flatMap((m) => m.pics ?? []).slice(-4)) {
+        const d = await getImg(i)
+        if (d) pics.set(i, d)
+        if (d && mode === 'cli') paths.set(i, await picPath(i))
+      }
       if (id === 'nano') { // a picture: the conversation so far is the prompt, no map
         // the newest picture goes along with its turn, so "make it darker" changes that picture instead of drawing a new one
         const last = [...history].reverse().find((m) => m.img || m.imgId)
         const pic = last ? last.img ?? await getImg(last.imgId!).catch(() => undefined) : undefined
-        const r = await nanoImage(key, model, history.map((m) => ({ role: m.role, text: m.text, img: m === last ? pic : undefined })))
+        const turns = history.map((m) => ({ role: m.role, text: m.text, imgs: [...(m === last && pic ? [pic] : []), ...(m.pics ?? []).flatMap((i) => pics.get(i) ?? [])] }))
+        const r = key ? await nanoImage(key, model, turns) : await nanoAgy(turns.map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.text}`).join('\n\n'), turns.flatMap((m) => m.imgs))
         const iid = imgId(); putImg(iid, r.img)
         reply = { role: 'assistant', text: r.text, img: r.img, imgId: iid, at: Date.now(), tin: r.input, tout: r.output }
       } else {
-        const out = mode === 'cli'
-          ? await runAgentCli(a.cli, cliPrompt(system, history), model, effortFixed ? '' : EFFORTS[effort][0])
-          : await callApi(id, key, system, history, model, effort)
-        reply = { role: 'assistant', text: out.trim(), at: Date.now(), tin, tout: tokens(out) }
+        // The CLI agent can open files, so it also gets the closest files with the lines of their definitions (after the dialogue: the cached start is untouched).
+        const run = () => runAgent(a.cli, cliPrompt(system, history, paths, topHits(notes, text, 5)), useModel, effortFixed || useModel.includes('haiku') ? '' : level).then((r) => { recordRead(r.files); return r.text })
+        const out = mode === 'cli' ? await run() : await callApi(id, key, system, history, useModel, easy ? 0 : effort, pics)
+        reply = { role: 'assistant', text: out.trim(), at: Date.now(), tin, tout: tokens(out), via: easy ? list.find((m) => m[0] === useModel)?.[1] ?? useModel : undefined } // via = the cheaper model that answered instead of yours
       }
     } catch (e) {
       reply = { role: 'assistant', text: `Error: ${e instanceof Error ? e.message : e}`, at: Date.now(), error: true }
@@ -214,10 +240,12 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
       if (!data || !m.imgId) return
       const [head, b64] = data.split(',')
       const ext = head.includes('jpeg') ? 'jpg' : head.includes('webp') ? 'webp' : 'png'
-      const path = await saveImage(m.imgId, ext, Array.from(atob(b64), (c) => c.charCodeAt(0)))
+      await saveImage(m.imgId, ext, Array.from(atob(b64), (c) => c.charCodeAt(0)))
+      const path = `images/${m.imgId}.${ext}` // relative to the notes, where save_image writes it
       onInsert(`![${m.text.slice(0, 60).replace(/\W+/g, ' ')}](${path})`)
     } catch (e) { console.error(e) }
   }
+  const addFiles = async (files: File[]) => { const got = await readPics(files); setPending((l) => [...l, ...got]) }
   const scroll = () => end.current?.scrollIntoView({ block: 'end' })
   useEffect(() => { scroll() }, [msgs.length, busy])
 
@@ -269,7 +297,6 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
       <div className="flex items-center gap-1 px-4 h-14 border-b border-line">
         <span className="font-serif text-lg font-semibold truncate">{chat?.title ?? t('chatNew')}</span>
         <span className="ml-auto flex items-center gap-1.5 text-micro text-dim mr-1 shrink-0"><span className={`w-1.5 h-1.5 rounded-full ${real ? 'bg-status-ok' : 'bg-accent'}`} />{status}</span>
-        <button onClick={() => openRoot().catch(console.error)} title={t('openFolder')} className={icon}><FolderOpen size={15} /></button>
         <button onClick={newChat} title={t('chatNew')} className={icon}><Plus size={15} /></button>
         <button onClick={() => setShowHist((v) => !v)} title={t('history')} className={`${icon} ${showHist ? 'bg-panel text-fg' : ''}`}><Clock size={15} /></button>
         <button onClick={onClose} title={t('close')} className={icon}><X size={15} /></button>
@@ -313,7 +340,9 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
               ? <p className="px-3.5 py-2.5 rounded-xl bg-field border border-line text-micro leading-relaxed text-dim">{t('effortInName')}</p>
               : <Segmented value={String(effort)} onChange={(v) => set({ effort: +v })} options={EFFORTS.map(([k], i) => [String(i), t(k)] as const)} />}
           </div>}
+          {routable && <label title={t('autoRouteTip')} className="flex items-center gap-2 text-xs text-dim hover:text-fg cursor-pointer"><input type="checkbox" checked={!!cfg.auto} onChange={(e) => set({ auto: e.target.checked })} />{t('autoRoute')}</label>}
           {!apiOnly && <Limits />}
+          <button onClick={() => openRoot().catch(console.error)} className="flex items-center gap-2 text-xs text-dim hover:text-fg self-start"><FolderOpen size={14} />{t('openFolder')}</button>
         </div>
       )}
 
@@ -323,6 +352,7 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
         )}
         {msgs.map((m, i) => m.role === 'user'
           ? <div key={m.at} className="anim-rise self-end max-w-[85%] flex flex-col items-end gap-1">
+            {m.pics && <div className="flex flex-wrap justify-end gap-1.5">{m.pics.map((i) => <StoredImg key={i} id={i} plain cls="max-h-28 rounded-lg border border-line" />)}</div>}
             <p className="whitespace-pre-wrap px-4 py-2.5 rounded-2xl rounded-br-md bg-panel border border-line">{m.text}</p>
             <span className="text-micro text-dim">{new Date(m.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
           </div>
@@ -332,8 +362,14 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
       </div>
 
       <div className="px-4 pt-3 pb-3">
+        {pending.length > 0 && <div className="flex flex-wrap gap-1.5 pb-2">{pending.map((p) => (
+          <span key={p.id} className="relative"><img src={p.data} className="h-12 w-12 object-cover rounded-lg border border-line" />
+            <button onClick={() => setPending((l) => l.filter((x) => x.id !== p.id))} className="absolute -top-1 -right-1 p-0.5 rounded-full bg-surface border border-line text-dim hover:text-status-err"><X size={10} /></button></span>))}</div>}
         <div className="flex items-end gap-2 pl-4 pr-2 py-2 rounded-2xl bg-field border border-line focus-within:border-accent focus-within:shadow-float">
+          <label title={t('attachImage')} className="btn-press p-1.5 rounded-lg text-dim hover:text-accent cursor-pointer self-center"><Paperclip size={15} />
+            <input type="file" accept="image/*" multiple hidden onChange={(e) => { addFiles([...(e.target.files ?? [])]); e.target.value = '' }} /></label>
           <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={2} spellCheck={false} placeholder={t('promptPh')}
+            onPaste={(e) => { const f = [...e.clipboardData.files].filter((x) => x.type.startsWith('image/')); if (f.length) { e.preventDefault(); addFiles(f) } }}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
             className="flex-1 min-w-0 py-1 bg-transparent outline-none resize-none text-sm placeholder:text-dim max-h-40" />
           <button onClick={send} disabled={busy || !prompt.trim()} title={t('send')}

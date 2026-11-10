@@ -79,8 +79,9 @@ fn notes() -> Result<Vec<Note>, String> {
 }
 
 #[tauri::command]
-fn list_notes() -> Result<Vec<Note>, String> {
-    notes()
+async fn list_notes() -> Result<Vec<Note>, String> {
+    // Sync commands run on the UI thread; reading a big scanned graph there freezes the window.
+    tauri::async_runtime::spawn_blocking(notes).await.map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -97,21 +98,61 @@ fn save_note(name: String, content: String) -> Result<(), String> {
     fs::write(d.join(format!("{name}.deso")), content).map_err(|e| e.to_string())
 }
 
-// A generated picture saved next to the notes (`images/<name>.<ext>`); returns that relative path for a link in a note.
+// A picture saved next to the notes (`images/<name>.<ext>`); returns its absolute path (the CLIs read images by path).
 #[tauri::command]
 fn save_image(name: String, ext: String, bytes: Vec<u8>) -> Result<String, String> {
     valid(&name)?;
     if !["png", "jpg", "jpeg", "webp"].contains(&ext.as_str()) { return Err(format!("bad image type: {ext}")) }
     let d = data_dir().join("images");
     fs::create_dir_all(&d).map_err(|e| e.to_string())?;
-    fs::write(d.join(format!("{name}.{ext}")), bytes).map_err(|e| e.to_string())?;
-    Ok(format!("images/{name}.{ext}"))
+    let f = d.join(format!("{name}.{ext}"));
+    fs::write(&f, bytes).map_err(|e| e.to_string())?;
+    Ok(f.to_string_lossy().into_owned())
+}
+
+/// Where an agent should write a picture it draws: `images/<name>.<ext>` next to the notes (the folder is created).
+#[tauri::command]
+fn image_path(name: String, ext: String) -> Result<String, String> {
+    valid(&name)?;
+    if !["png", "jpg", "jpeg", "webp"].contains(&ext.as_str()) { return Err(format!("bad image type: {ext}")) }
+    let d = data_dir().join("images");
+    fs::create_dir_all(&d).map_err(|e| e.to_string())?;
+    Ok(d.join(format!("{name}.{ext}")).to_string_lossy().into_owned())
+}
+
+/// The bytes of a picture written to the path `image_path` gave for this name.
+#[tauri::command]
+fn read_image(name: String, ext: String) -> Result<Vec<u8>, String> {
+    valid(&name)?;
+    if !["png", "jpg", "jpeg", "webp"].contains(&ext.as_str()) { return Err(format!("bad image type: {ext}")) }
+    fs::read(data_dir().join("images").join(format!("{name}.{ext}"))).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn delete_note(name: String) -> Result<(), String> {
     valid(&name)?;
     fs::remove_file(data_dir().join(format!("{name}.deso"))).map_err(|e| e.to_string())
+}
+
+/// A project file named by a note's `?path:`. It must exist and stay inside the project folder (a `..` or a symlink cannot leave it); `.git` is off limits.
+fn source_path(rel: &str) -> Result<PathBuf, String> {
+    let r = fs::canonicalize(root()).map_err(|e| e.to_string())?;
+    let p = fs::canonicalize(r.join(rel)).map_err(|e| e.to_string())?;
+    if !p.starts_with(&r) || !p.is_file() || p.components().any(|c| c.as_os_str() == ".git") { return Err(format!("not a project file: {rel}")) }
+    Ok(p)
+}
+
+/// The text of a project file, to edit it in the app (never launched). Binary or huge files are refused.
+#[tauri::command]
+fn read_source(path: String) -> Result<String, String> {
+    let p = source_path(&path)?;
+    if fs::metadata(&p).map_err(|e| e.to_string())?.len() > 2_000_000 { return Err("file is too large to edit here (over 2 MB)".into()) }
+    fs::read_to_string(&p).map_err(|_| "not a text file".into())
+}
+
+#[tauri::command]
+fn save_source(path: String, content: String) -> Result<(), String> {
+    fs::write(source_path(&path)?, content).map_err(|e| e.to_string())
 }
 
 const GENERATED: &str = "?generated: scan";
@@ -209,11 +250,38 @@ fn watch_project(app: tauri::AppHandle) -> Result<(), String> {
 // so a longer prompt goes through a temp file the agent is told to read.
 // Runs off the UI thread.
 #[derive(Serialize)]
-struct Answer { text: String, input: u64, cached: u64, output: u64, cost: f64 }
+struct Answer { text: String, input: u64, cached: u64, output: u64, cost: f64, files: Vec<String>, wide: bool }
 
-/// Both CLIs run with `--output-format json`; that gives the answer plus its token usage. None = not JSON (print the raw output).
+/// `p` relative to `base` with forward slashes; None when it lies outside.
+fn rel_to(p: &str, base: &std::path::Path) -> Option<String> {
+    let (p, b) = (p.replace('\\', "/"), base.to_string_lossy().replace('\\', "/"));
+    if !p.contains(':') && !p.starts_with('/') { return Some(p) } // already relative
+    let b = b.trim_end_matches('/');
+    p.get(..b.len()).filter(|h| h.eq_ignore_ascii_case(b)).and_then(|_| p[b.len()..].strip_prefix('/')).map(str::to_string)
+}
+
+/// What a `claude` run touched, from its stream of events: the project files it opened (relative paths), and whether its answer may
+/// rest on more than those files (`wide`: it searched, ran a command, wrote, or read outside the project).
+fn opened(raw: &str, base: &std::path::Path) -> (Vec<String>, bool) {
+    let (mut files, mut wide) = (vec![], false);
+    for j in raw.lines().filter_map(|l| serde_json::from_str::<serde_json::Value>(l.trim()).ok()).filter(|j| j["type"] == "assistant") {
+        for b in j["message"]["content"].as_array().into_iter().flatten().filter(|b| b["type"] == "tool_use") {
+            if b["name"] != "Read" { wide = true }
+            match b["input"]["file_path"].as_str().map(|p| rel_to(p, base)) {
+                Some(Some(r)) => if !files.contains(&r) { files.push(r) },
+                Some(None) => wide = true,
+                None => {}
+            }
+        }
+    }
+    (files, wide)
+}
+
+/// `agy` prints one JSON object (`--output-format json`); `claude` prints one event per line (`stream-json`), the `result` event being
+/// that same object. It gives the answer plus its token usage. None = not JSON (print the raw output).
 fn parse_answer(cli: &str, raw: &str) -> Option<Result<Answer, String>> {
-    let j: serde_json::Value = serde_json::from_str(raw.trim()).ok()?;
+    let j: serde_json::Value = if cli == "claude" { raw.lines().filter_map(|l| serde_json::from_str::<serde_json::Value>(l.trim()).ok()).find(|j| j["type"] == "result" || j["result"].is_string())? }
+        else { serde_json::from_str(raw.trim()).ok()? };
     let u = &j["usage"];
     let n = |k: &str| u[k].as_u64().unwrap_or(0);
     let (text, ok) = if cli == "claude" {
@@ -226,9 +294,9 @@ fn parse_answer(cli: &str, raw: &str) -> Option<Result<Answer, String>> {
         return Some(Err(if text.trim().is_empty() { format!("{cli}: {why}") } else { text }));
     }
     Some(Ok(if cli == "claude" {
-        Answer { text, input: n("input_tokens") + n("cache_creation_input_tokens"), cached: n("cache_read_input_tokens"), output: n("output_tokens"), cost: j["total_cost_usd"].as_f64().unwrap_or(0.0) }
+        Answer { text, input: n("input_tokens") + n("cache_creation_input_tokens"), cached: n("cache_read_input_tokens"), output: n("output_tokens"), cost: j["total_cost_usd"].as_f64().unwrap_or(0.0), files: vec![], wide: true }
     } else {
-        Answer { text, input: n("input_tokens"), cached: n("cache_read_tokens"), output: n("output_tokens") + n("thinking_tokens"), cost: 0.0 }
+        Answer { text, input: n("input_tokens"), cached: n("cache_read_tokens"), output: n("output_tokens") + n("thinking_tokens"), cost: 0.0, files: vec![], wide: true }
     }))
 }
 
@@ -248,7 +316,7 @@ fn parse_codex(raw: &str) -> Option<Result<Answer, String>> {
     if !any { return None }
     let n = |k: &str| u[k].as_u64().unwrap_or(0);
     if text.trim().is_empty() { return Some(Err(err.unwrap_or_else(|| "codex: empty answer".into()))) }
-    Some(Ok(Answer { text, input: n("input_tokens").saturating_sub(n("cached_input_tokens")), cached: n("cached_input_tokens"), output: n("output_tokens"), cost: 0.0 }))
+    Some(Ok(Answer { text, input: n("input_tokens").saturating_sub(n("cached_input_tokens")), cached: n("cached_input_tokens"), output: n("output_tokens"), cost: 0.0, files: vec![], wide: true }))
 }
 
 /// session: a UUID to start (resume = false) or continue (resume = true) a `claude` conversation; tools: None = all, "" = none;
@@ -261,13 +329,15 @@ async fn run_agent(cli: String, prompt: String, model: Option<String>, effort: O
     let model_opt = model.clone();
     let mut args: Vec<String> = model.filter(|m| !m.is_empty()).map(|m| vec!["--model".into(), m]).unwrap_or_default();
     if let Some(e) = effort.filter(|e| !e.is_empty()) { args.extend(["--effort".into(), e]) }
-    args.extend(["--output-format".into(), "json".into()]);
+    args.extend(["--output-format".into(), if cli == "claude" { "stream-json" } else { "json" }.into()]);
+    let base = cwd.clone().unwrap_or_else(root);
     let system = system.filter(|s| !s.is_empty());
     let mut temp: Option<PathBuf> = None;
     let stdin_prompt = match cli.as_str() {
         "claude" => {
             // Lean start: no MCP servers, no user/project hooks or plugins; their tool descriptions cost tokens on every call.
             args.extend(["--strict-mcp-config".into(), "--setting-sources".into(), "".into()]);
+            args.push("--verbose".into()); // stream-json needs it: the events name the files the agent opened
             // A subagent is a whole second Claude Code run; agents spawning them is where the limit goes fastest.
             args.extend(["--disallowedTools".into(), "Agent,Task".into()]);
             if let Some(t) = tools { args.extend(["--tools".into(), t]) }
@@ -309,7 +379,9 @@ async fn run_agent(cli: String, prompt: String, model: Option<String>, effort: O
         if let Some(w) = writer { let _ = w.join(); }
         let said = String::from_utf8_lossy(&o.stdout).into_owned();
         if cli == "codex" { if let Some(r) = parse_codex(&said) { return r } }
-        else if let Some(r) = parse_answer(&cli, &said) { return r }
+        else if let Some(r) = parse_answer(&cli, &said) {
+            return r.map(|mut a| { if cli == "claude" { (a.files, a.wide) = opened(&said, &base) } a })
+        }
         // Not JSON: the CLI failed before answering (bad model, not signed in, killed by Stop); show whatever it printed.
         let msg = [&o.stderr, &o.stdout].iter().map(|b| String::from_utf8_lossy(b).trim().to_string()).find(|m| !m.is_empty());
         Err(msg.unwrap_or_else(|| if o.status.success() { format!("{cli} returned an empty answer") } else { format!("{cli} exited with {}", o.status) }))
@@ -369,6 +441,16 @@ async fn project_stamp(worktree: Option<String>) -> Result<String, String> {
         let d = match worktree.filter(|w| !w.is_empty()) { Some(id) => worktree::dir(&r, &id)?, None => r };
         Ok(worktree::stamp(&d))
     }).await.map_err(|e| e.to_string())?
+}
+/// Size and modification time of the given project files (relative paths): an answer built from those files alone stays good
+/// until one of them changes, whatever else changed in the project.
+#[tauri::command]
+fn files_stamp(paths: Vec<String>, worktree: Option<String>) -> Result<String, String> {
+    let base = match worktree.filter(|w| !w.is_empty()) { Some(id) => worktree::dir(&root(), &id)?, None => root() };
+    Ok(paths.iter().map(|p| {
+        if p.contains("..") || std::path::Path::new(p).is_absolute() { return format!("{p}:outside") }
+        match fs::metadata(base.join(p)) { Ok(m) => format!("{p}:{}:{:?}", m.len(), m.modified().ok()), Err(_) => format!("{p}:gone") }
+    }).collect::<Vec<_>>().join("\n"))
 }
 #[tauri::command]
 async fn worktree_diff(id: String) -> Result<String, String> {
@@ -461,6 +543,24 @@ hand-written
     }
 
     #[test]
+    fn source_files_stay_inside_the_project() {
+        let base = std::env::temp_dir().join(format!("armyx-src-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let proj = base.join("proj");
+        fs::create_dir_all(proj.join("src")).unwrap();
+        fs::write(proj.join("src/a.py"), "print(1)").unwrap();
+        fs::write(base.join("secret.txt"), "no").unwrap();
+        *ROOT.lock().unwrap_or_else(|e| e.into_inner()) = Some(proj.clone());
+        assert_eq!(read_source("src/a.py".into()).unwrap(), "print(1)");
+        save_source("src/a.py".into(), "print(2)".into()).unwrap();
+        assert_eq!(read_source("src/a.py".into()).unwrap(), "print(2)");
+        assert!(read_source("../secret.txt".into()).is_err()); // cannot climb out
+        assert!(save_source("src/new.py".into(), "x".into()).is_err()); // never creates files
+        assert!(read_source("src".into()).is_err()); // a folder is not a file
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
     fn watcher_ignores_the_graph_and_build_folders() {
         for p in ["/p/src/a.rs", "/p/README.md"] { assert!(relevant(std::path::Path::new(p)), "{p}") }
         for p in ["/p/.desovault/a.deso", "/p/node_modules/x/i.js", "/p/.git/index", "/p/.armyx/graph/a.deso", "/p/target/debug/x"] { assert!(!relevant(std::path::Path::new(p)), "{p}") }
@@ -478,6 +578,23 @@ hand-written
     }
 
     #[test]
+    fn claude_events_give_the_answer_and_the_files_it_opened() {
+        let base = std::path::Path::new(r"C:\proj");
+        let raw = [
+            r#"{"type":"system","subtype":"init"}"#,
+            r#"{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"c:\\proj\\src\\a.ts"}}]}}"#,
+            r#"{"type":"result","result":"alpha","is_error":false,"usage":{"input_tokens":5,"cache_read_input_tokens":7,"output_tokens":2},"total_cost_usd":0.5}"#,
+            r#"{"type":"system","subtype":"task_summary"}"#,
+        ].join("\n");
+        let a = parse_answer("claude", &raw).unwrap().unwrap();
+        assert_eq!((a.text.as_str(), a.input, a.cached, a.output, a.cost), ("alpha", 5, 7, 2, 0.5));
+        assert_eq!(opened(&raw, base), (vec!["src/a.ts".to_string()], false));
+        let grep = r#"{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Grep","input":{"pattern":"x"}},{"type":"tool_use","name":"Read","input":{"file_path":"D:\\other\\b.ts"}}]}}"#;
+        assert_eq!(opened(grep, base), (vec![], true)); // a search, and a file outside the project
+        assert_eq!(rel_to(r"C:\project2\a.ts", base), None); // a folder that only starts the same
+    }
+
+    #[test]
     fn valid_rejects_paths() {
         for bad in ["", "../a", "a/b", r"a\b", "a b", "a.deso", "ü"] { assert!(valid(bad).is_err(), "{bad}") }
         for ok in ["a", "kernel-arch", "x_1"] { assert!(valid(ok).is_ok(), "{ok}") }
@@ -488,7 +605,7 @@ hand-written
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![list_notes, read_note, save_note, save_image, delete_note, run_agent, stop_agents, agy_models, claude_usage, agy_usage, keys_load, keys_save, watch_project, worktree_create, project_stamp, worktree_diff, worktree_apply, worktree_discard, index_project, set_root, get_root, open_root])
+        .invoke_handler(tauri::generate_handler![list_notes, read_note, save_note, save_image, read_source, save_source, image_path, read_image, delete_note, run_agent, files_stamp, stop_agents, agy_models, claude_usage, agy_usage, keys_load, keys_save, watch_project, worktree_create, project_stamp, worktree_diff, worktree_apply, worktree_discard, index_project, set_root, get_root, open_root])
         .run(tauri::generate_context!())
         .expect("error while running Taurium");
 }

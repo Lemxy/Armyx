@@ -1,9 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useDebounced } from '../debounce'
 import { ChevronsUpDown, Plus, RefreshCw, Search } from 'lucide-react'
 import { links, savings, tags, type Note } from '../deso'
 import { useI18n } from '../i18n'
 import { projectLabel } from '../vault'
 import type { MenuItem } from './ContextMenu'
+
+const LIMIT = 300 // shortcut: no virtual list; the search box reaches the rest, upgrade when that annoys
 
 interface Props {
   notes: Note[]; current: string; project: string; onSelect: (n: string) => void; onNew: (n: string) => void
@@ -28,9 +31,11 @@ export default function Sidebar({ notes, current, project, onSelect, onNew, onMe
     return () => window.removeEventListener('keydown', h)
   }, [])
 
-  const allTags = [...new Set(notes.flatMap((n) => tags(n.content)))].sort()
-  const shown = notes.filter((n) => n.name.includes(q.toLowerCase()) && (!tag || tags(n.content).includes(tag)))
-  const total = notes.reduce((a, n) => { const s = savings(n.content); return { d: a.d + s.d, m: a.m + s.m } }, { d: 0, m: 0 })
+  const slow = useDebounced(notes)
+  const allTags = useMemo(() => [...new Set(slow.flatMap((n) => tags(n.content)))].sort(), [slow])
+  const total = useMemo(() => slow.reduce((a, n) => { const s = savings(n.content); return { d: a.d + s.d, m: a.m + s.m } }, { d: 0, m: 0 }), [slow])
+  const all = useMemo(() => notes.filter((n) => n.name.includes(q.toLowerCase()) && (!tag || tags(n.content).includes(tag))), [notes, q, tag])
+  const shown = all.slice(0, LIMIT) // a scanned project can have thousands of notes; rendering them all is what froze the list
 
   const submit = () => {
     const n = name.trim().toLowerCase()
@@ -104,6 +109,7 @@ export default function Sidebar({ notes, current, project, onSelect, onNew, onMe
             </li>
           )
         })}
+        {all.length > shown.length && <li className="px-3 py-2 text-micro text-dim">+{all.length - shown.length} …</li>}
       </ul>
       <div className="flex items-center gap-2 px-5 py-3 border-t border-line text-micro text-dim tabular-nums">
         <span>{t('notesTok', { n: notes.length, k: total.d })}</span>

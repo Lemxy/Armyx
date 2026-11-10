@@ -81,6 +81,17 @@ button:not(:disabled):active { transform: scale(.97); }
 .node-in { animation: node-in .5s var(--ease) both; transform-box: fill-box; transform-origin: center; }
 .pulse { animation: flow 1.2s linear infinite; }
 
+/* orchestra canvas: breathing glow on the running block, glowing error, drawn-in links, hoverable ports */
+@keyframes breathe { 0%, 100% { box-shadow: 0 0 0 1px var(--accent), 0 0 12px -2px var(--accent-dim) } 50% { box-shadow: 0 0 0 1px var(--accent), 0 0 34px 2px color-mix(in srgb, var(--accent) 40%, transparent) } }
+@keyframes draw { from { stroke-dashoffset: 1 } }
+.node-run { animation: breathe 2.4s ease-in-out infinite; }
+.node-err { box-shadow: 0 0 0 1px var(--status-err), 0 0 26px -4px color-mix(in srgb, var(--status-err) 55%, transparent); }
+.card-in { animation: node-in .45s var(--ease) both; }
+.port:hover { transform: scale(1.35); box-shadow: 0 0 10px currentColor; }
+.edge .draw { stroke-dasharray: 1; animation: draw .7s var(--ease) both; }
+.edge .line { transition: stroke-width .2s var(--ease), opacity .3s var(--ease); }
+.edge:hover .line { stroke-width: 3.5; }
+
 /* graph: dimming, recolouring and hover lift glide instead of snapping */
 .g-node { transition: opacity .4s var(--ease); }
 .g-node .card { transition: stroke .3s var(--ease), fill .3s var(--ease); }

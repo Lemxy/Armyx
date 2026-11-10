@@ -1,17 +1,21 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowUp, BookmarkPlus, FolderOpen, GitBranch, History, Plus, RotateCcw, Square, Trash2, X } from 'lucide-react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useDebounced } from '../debounce'
+import { ArrowUp, ChevronsDownUp, ChevronsUpDown, FolderOpen, GitBranch, History, Magnet, MoreHorizontal, Paperclip, Plus, RotateCcw, Scan, Square, Trash2, Workflow, X, ZoomIn, ZoomOut } from 'lucide-react'
 import { useI18n } from '../i18n'
-import { agyModels, inTauri, openRoot, runAgent, stopAgents, worktreeApply, worktreeCreate, worktreeDiff, worktreeDiscard, worktreeStamp, type Answer } from '../vault'
+import { agyModels, filesStamp, inTauri, openRoot, runAgent, saveImage, stopAgents, worktreeApply, worktreeCreate, worktreeDiff, worktreeDiscard, worktreeStamp, type Answer } from '../vault'
 import Markdown from './Markdown'
 import StoredImg from './StoredImg'
 import { MODELS } from './AgentSidebar'
-import { graphMap, tokens, type Note } from '../deso'
+import { SHEET_PROMPT, STYLE_PROMPT } from '../style'
+import { graphMap, subMap, tokens, type Note } from '../deso'
+import { coRead, mapOpts, recordRead } from '../mapmem'
 import type { MenuItem } from './ContextMenu'
 import { getKey } from '../keys'
 import { dsChat } from '../deepseek'
 import { dsUsage } from '../dsprice'
-import { nanoImage } from '../nano'
+import { nanoAgy, nanoImage } from '../nano'
 import { getImg, imgId, putImg } from '../imgs'
+import { picNote, picPath, readPics } from '../pics'
 import { BRIEF, BUDGET, clip, fromTemplate, leadChat, LOG_MAX, NOTE_MAX, READ_ONLY, runOrchestra, save, workerEffort, MAX_TURNS, type Agent, type Deps, type Entry, type Node, type Opts, type Orch, type Reply, type Row, type Template, type Use } from '../orchestra'
 
 const DEEPSEEK = MODELS.deepseek
@@ -47,14 +51,71 @@ const ROLES: readonly Role[] = [
     enText: 'You are the tester. Run the tests and the build; on a failure name the cause and the file. Do not fix the code.' },
 ]
 // Ready-made orchestras (the blocks are filled from the roles above) and your own, saved from the current one.
-const builtin = (lang: 'ru' | 'en'): Template[] => {
+const builtin = (lang: 'ru' | 'en', agyLow: string, agyHigh: string): Template[] => {
   const S = MODELS.claude[0][0], H = 'claude-haiku-5-5'
   const [coder, reviewer, researcher, , tester] = ROLES
   const lead: Node = { id: 'l', x: 40, y: 40, kind: 'start', agent: 'claude', model: S, text: '', notes: [] }
   const role = (id: string, x: number, r: Role, model: string): Node => ({ id, x, y: 40, kind: 'model', agent: 'claude', model, role: r[lang], text: r[lang === 'ru' ? 'ruText' : 'enText'], notes: [], review: r.review, tools: r.tools })
+    // Request -> turnaround sheet -> mesh -> checked GLB. The steps themselves live in the project's docs/02_zero_manual_pipeline.md (SmartModelSystem).
+  const three: Template = { name: lang === 'ru' ? '3D-ассет: запрос → GLB' : '3D asset: request → GLB', nodes: [
+      // The sheet standard is spelled out word for word from SmartModelSystem (docs/01, docs/04), so the brief does not depend on the lead opening the files.
+      { ...lead, text: lang === 'ru'
+        ? 'Агенту A дай готовый промпт для Nano Banana на английском: дословно по шаблону ниже (docs/04_prompt_templates.md, раздел 1). Подставь значения вместо {...}, остальной текст не меняй и не сокращай. {CHARACTER DESCRIPTION} и {WEAPON / PROP} бери из задачи. Если в задаче описана атака, Attack Animation Pose рисуй по ней. Цвета в Color Palette бери из задачи, если их там нет — выбери сам один раз: hex для каждой части, без раздела Color Palette промпт считается неполным. Для предмета (не персонажа) оставь только четыре вида в ряд, Style, Outlines, Color Palette (части самого предмета), Consistency и Background: Animation Breakdown, позы Idle и Attack и строку Pose убери. Нужна A-поза с руками в стороны от тела (рига нужна стоящая фигура с разведёнными руками).\n\nШаблон:\n' + SHEET_PROMPT + '\n\n' +
+          'Агенту B дай: имя ассета латиницей в snake_case; тип (персонаж или предмет); высоту в метрах (персонаж ~1.8, меч ~1.0); бюджет треугольников (предмет ~1500, персонаж ~6000); описание атаки из задачи дословно или «атака по умолчанию». Ещё hex-коды раздела Color Palette из промпта листа: список через запятую, без #000000. Агенту D напиши одно слово: «прогрев», агенту E — «покажи модель».'
+        : 'Give agent A a finished English prompt for Nano Banana: word for word from the template below (docs/04_prompt_templates.md, section 1). Fill the values in place of {...}, do not change or shorten the rest. Take {CHARACTER DESCRIPTION} and {WEAPON / PROP} from the task. If the task describes an attack, draw the Attack Animation Pose from it. Take the Color Palette colors from the task; if it has none, pick them yourself once: a hex for every part, a prompt without a Color Palette section is incomplete. For an object (not a character) keep only the four views in a row, Style, Outlines, Color Palette (the parts of the object itself), Consistency and Background: drop the Animation Breakdown, the Idle and Attack poses and the Pose line. Use an A-pose with the arms away from the body (the rig needs a standing figure with spread arms).\n\nTemplate:\n' + SHEET_PROMPT + '\n\n' +
+          'Give agent B: the asset name in snake_case; the type (character or prop); the height in meters (character ~1.8, sword ~1.0); the triangle budget (prop ~1500, character ~6000); the attack from the task word for word, or "default attack". Also the hex codes of the sheet prompt\'s Color Palette: a comma-separated list, without #000000. To agent D write one word: "warm-up", to agent E: "show the model".' },
+      { id: 'n', x: 360, y: 40, kind: 'model', agent: 'nano', model: 'gemini-3-pro-image-preview', text: '', notes: [] },
+      { id: 'b', x: 680, y: 40, kind: 'model', agent: 'claude', model: S, notes: [], text: lang === 'ru'
+        ? 'Ты сборщик 3D. Выполни конвейер из docs/02_zero_manual_pipeline.md (раздел «Image → 3D») для картинки из «Image file:»: скопируй её в references/<имя>.png, запусти image_to_3d.py (если в ответе меньше 4 видов или форма мусорная — повтори с --rembg), затем finish_model.py (если лид передал hex палитры, добавь --palette "hex,hex,..."; если нет, палитра извлечётся с листа сама). Для персонажа — auto_rig.py; если атака описана, сначала посмотри Attack Pose на листе, переведи описание в references/<имя>_attack.json по docs/03 (раздел «Своя атака») и передай --attack. Blender запускай с --python-exit-code 1, команды — с таймаутом 600000 мс. Если ревьюер вернул замечания — исправь только названное. Ответь: пути к GLB, превью и кадрам атаки, строки EXPORTED и описание атаки дословно.'
+        : 'You are the 3D builder. Run the pipeline in docs/02_zero_manual_pipeline.md (section "Image → 3D") for the picture from "Image file:": copy it into references/<name>.png, run image_to_3d.py (if it reports fewer than 4 views or the shape is junk, rerun with --rembg), then finish_model.py (if the lead gave palette hexes, add --palette "hex,hex,..."; otherwise the palette is extracted from the sheet itself). For a character run auto_rig.py; if an attack is described, first look at the Attack Pose on the sheet, turn the description into references/<name>_attack.json per docs/03 (section "Своя атака") and pass --attack. Run Blender with --python-exit-code 1 and the commands with a 600000 ms timeout. If the reviewer sent remarks, fix only those. Answer: the GLB, preview and attack-frame paths, the EXPORTED lines and the attack description word for word.' },
+      { id: 'c', x: 1000, y: 40, kind: 'model', agent: 'claude', model: S, notes: [], review: 2, tools: READ_ONLY, text: lang === 'ru'
+        ? 'Ты ревьюер 3D. Сначала открой референс-лист и сверь его с чек-листом docs/01_turnaround_standards.md (раздел 4): форма читается из простых объёмов; грани чётко различимы; контур единой толщины, чистый, без разрывов; заливка плоская или cel-shading, минимум цветовых переходов; пропорции, силуэт, цвета и детали совпадают на всех четырёх видах; у персонажа есть Idle Pose и Attack Pose и они сохраняют пропорции, силуэт и цвета; полигонаж достижим для Low-Poly Indie Game; фон однотонный, без лишних объектов. Затем открой превью: силуэт, пропорции, цвета, бюджет треугольников. У персонажа открой кадры атаки (*_attack_f*.png) и сверь с описанием атаки: какая рука, направление удара, ноги. Если годится — OK, иначе конкретно что поправить: --seed/--faces/--height или какие поля attack.json в каких кадрах и на сколько градусов.'
+        : 'You are the 3D reviewer. First open the reference sheet and check it against the checklist of docs/01_turnaround_standards.md (section 4): the form reads from simple volumes; the faceted planes are clearly distinct; the outline is one clean thickness without breaks; flat fill or cel-shading, few color transitions; proportions, silhouette, colors and details match on all four views; a character has the Idle Pose and the Attack Pose and they keep the proportions, silhouette and colors; the polygon count is reachable for a Low-Poly Indie Game; the background is plain, with no extra objects. Then open the preview: silhouette, proportions, colors, triangle budget. For a character open the attack frames (*_attack_f*.png) and check them against the attack description: which hand, the strike direction, the legs. If fine, OK; otherwise exactly what to change: --seed/--faces/--height, or which attack.json fields in which frames and by how many degrees.' },
+      // Starts the Hunyuan server while Nano draws (~1 min to load the model), so the builder finds it ready. Haiku: it only runs one command.
+      { id: 'w', x: 360, y: 300, kind: 'model', agent: 'claude', model: H, tools: 'Bash', notes: [], name: lang === 'ru' ? 'Прогрев Hunyuan' : 'Hunyuan warm-up', text: lang === 'ru'
+        ? 'Выполни ровно одну команду из корня проекта и ничего больше: tools/hunyuan3d/.venv/Scripts/python scripts/image_to_3d.py --warmup. Ответь её выводом одной строкой.'
+        : 'Run exactly one command from the project root and nothing else: tools/hunyuan3d/.venv/Scripts/python scripts/image_to_3d.py --warmup. Answer with its output as one line.' },
+      // The end: opens the finished model in Blender for you. After the reviewer, so it opens once, with whatever the review loop ended on.
+      { id: 's', x: 1320, y: 40, kind: 'model', agent: 'claude', model: H, tools: 'Bash', notes: [], name: lang === 'ru' ? 'Показ в Blender' : 'Show in Blender', text: lang === 'ru'
+        ? 'Возьми из ответа сборщика путь к итоговому GLB (у персонажа — *_animated.glb, у предмета — ReadyModels/<имя>.glb) и выполни ровно одну команду из корня проекта: tools/hunyuan3d/.venv/Scripts/python scripts/open_model.py <путь>. Ответь её выводом одной строкой.'
+        : 'Take the final GLB path from the builder answer (a character: *_animated.glb, a prop: ReadyModels/<name>.glb) and run exactly one command from the project root: tools/hunyuan3d/.venv/Scripts/python scripts/open_model.py <path>. Answer with its output as one line.' },
+    ], edges: [['l', 'n'], ['l', 'b'], ['n', 'b'], ['b', 'c'], ['l', 'w'], ['b', 's'], ['c', 's']] }
   return [
     { name: lang === 'ru' ? 'Код + ревью' : 'Code + review', nodes: [lead, role('a', 360, researcher, H), role('b', 680, coder, S), role('c', 1000, reviewer, S)], edges: [['l', 'a'], ['a', 'b'], ['b', 'c']] },
     { name: lang === 'ru' ? 'Код + тесты + ревью' : 'Code + tests + review', nodes: [lead, role('b', 360, coder, S), role('t', 680, tester, S), role('c', 1000, reviewer, S)], edges: [['l', 'b'], ['b', 't'], ['t', 'c']] },
+    three,
+    // Who does what: Gemini leads and designs (long context, cheap), Nano Banana Pro draws, DeepSeek writes bulk text and balance tables,
+    // Sonnet writes the gameplay code, Opus reviews it (read-only, so it stays cheap). Letters: A designer, B artist, C writer, D coder, E tester, F reviewer.
+    (() => {
+      // shortcut: the pipeline lives in one fixed folder on this machine; make it a setting when someone else uses the template
+      const SMS = 'C:/Users/lemxy/Desktop/SmartModelSystem'
+      const ru = lang === 'ru', m = (id: string, x: number, y: number, agent: Agent, model: string, text: string, o: Partial<Node> = {}): Node => ({ id, x, y, kind: 'model', agent, model, text, notes: [], ...o })
+      const home = ru ? 'Конвейер 3D лежит в ' + SMS + '. Все пути «из корня проекта» ниже (docs/, scripts/, tools/, references/, ReadyModels/) относятся к этой папке, а не к текущему проекту: начинай каждую команду с cd "' + SMS + '" &&, документы читай оттуда.'+"\n\n" : 'The 3D pipeline lives in ' + SMS + '. Every path "from the project root" below (docs/, scripts/, tools/, references/, ReadyModels/) is relative to that folder, not to the current project: start every command with cd "' + SMS + '" &&, read the docs from there.'+"\n\n"
+      // shortcut: the Unity project lives in one fixed folder on this machine; make it a setting when someone else uses the template
+      const UNITY = 'C:/Users/lemxy/My project'
+      const unity = ru
+        ? 'Игра на Unity лежит в ' + UNITY + ' (читай ROADMAP.md оттуда). Проверка без редактора: cd "' + UNITY + '" && cmd /c Check.bat: компилирует код и пересобирает сцену Stage1, ошибки (error CS, Exception, Stage1Setup:) печатает, код выхода 0 = ок; ошибка импорта skeleton_archer_animated.glb известна, капсула-заглушка нормальна. Если Check.bat пишет, что редактор открыт, остановись и скажи об этом. Полный доступ: правь любые файлы проекта, включая Assets/Scripts/Editor/Stage1Setup.cs. Нашёл ошибку: исправь причину и повтори Check.bat (до 3 раз). Запуск для человека: Play.bat, сам его не запускай.\n\n'
+        : 'The Unity game lives in ' + UNITY + ' (read ROADMAP.md there). Check without the editor: cd "' + UNITY + '" && cmd /c Check.bat: it compiles the code and rebuilds the Stage1 scene, prints the errors (error CS, Exception, Stage1Setup:), exit code 0 = ok; the skeleton_archer_animated.glb import error is known, the capsule placeholder is fine. If Check.bat says the editor is open, stop and say so. Full access: edit any file of the project, including Assets/Scripts/Editor/Stage1Setup.cs. Found a bug: fix the cause and rerun Check.bat (up to 3 times). Play.bat is for the human, do not run it.\n\n'
+      return {
+        name: ru ? 'Геймдев' : 'Gamedev',
+        nodes: [
+          { ...lead, agent: 'agy', model: agyLow, text: ru
+            ? 'Если задаче нужна 3D-модель (персонаж или предмет): агенту B вместо спрайта дай готовый английский промпт листа дословно по шаблону ниже, подставь значения вместо {...}, остальное не меняй; для предмета оставь только четыре вида в ряд, Style, Outlines, Color Palette, Consistency и Background; нужна A-поза. Агенту G дай: имя ассета латиницей в snake_case; тип (персонаж или предмет); высоту в метрах; бюджет треугольников (предмет ~1500, персонаж ~6000); описание атаки из задачи или «атака по умолчанию». Ещё hex-коды раздела Color Palette из промпта листа: список через запятую, без #000000. Агенту I напиши одно слово: «прогрев». Если 3D не нужна, агентам G и I напиши одно слово: «пропусти».\n\nШаблон листа:\n' + SHEET_PROMPT
+            : 'If the task needs a 3D model (a character or a prop): give agent B, instead of a sprite, a finished English sheet prompt word for word from the template below, fill the values in place of {...}, change nothing else; for a prop keep only the four views in a row, Style, Outlines, Color Palette, Consistency and Background; use an A-pose. Give agent G: the asset name in snake_case; the type (character or prop); the height in meters; the triangle budget (prop ~1500, character ~6000); the attack from the task, or "default attack". Also the hex codes of the sheet prompt\'s Color Palette: a comma-separated list, without #000000. To agent I write one word: "warm-up". If no 3D is needed, write agents G and I one word: "skip".\n\nSheet template:\n' + SHEET_PROMPT },
+          m('g', 360, 40, 'agy', agyHigh, ru ? 'Ты геймдизайнер. Опиши механику по задаче: цикл игры, правила, числа с разумными значениями, крайние случаи и как проверить в игре. Без кода. В конце списком: какие ассеты нарисовать и какие тексты нужны. Арт-стиль проекта: Low-poly cartoon, faceted planes, плоские цвета с cel-shading, жирные чёрные контуры.' : 'You are the game designer. Describe the mechanic for the task: the game loop, rules, numbers with sensible values, edge cases and how to check it in the game. No code. End with lists: which assets to draw and which texts are needed. The art style of the project: Low-poly cartoon, faceted planes, flat colors with cel-shading, bold black outlines.', { role: ru ? 'Геймдизайнер' : 'Game designer' }),
+          m('n', 360, 300, 'nano', 'gemini-3-pro-image-preview', (ru ? 'Ты художник. Нарисуй один ассет из задачи (спрайт, иконка, элемент интерфейса или концепт) строго в стиле проекта, он задан ниже. В Color Palette укажи hex каждой части ассета, контуры #000000; цвета фиксируются один раз и неизменны.' : 'You are the artist. Draw one asset from the task (a sprite, an icon, a UI element or a concept) strictly in the project style given below. In the Color Palette give a hex for every part of the asset, outlines #000000; the colors are fixed once and do not change.') + '\n\n' + STYLE_PROMPT, { role: ru ? 'Художник' : 'Artist' }),
+          m('w', 680, 300, 'deepseek', 'deepseek-v4-flash', ru ? 'Ты автор контента. Напиши тексты и данные для игры: диалоги, названия и описания предметов, таблицу баланса компактным JSON или CSV. Не выдумывай механики, держись плана геймдизайнера.' : 'You are the content writer. Write the texts and data for the game: dialogue, item names and descriptions, a balance table as compact JSON or CSV. Do not invent mechanics, stick to the designer\'s plan.', { role: ru ? 'Автор контента' : 'Content writer' }),
+          m('b', 1000, 40, 'claude', S, unity + (ru ? 'Ты геймплей-программист. Реализуй механику по плану геймдизайнера: меняй только нужные файлы, минимальный diff; числа (скорость, урон, кулдауны) выноси в константы или конфиг; тексты и данные бери из ответа автора контента. Проверь, что проект собирается. Если ревьюер вернул замечания, исправь только названное. Отвечай коротко: что изменено и где.' : 'You are the gameplay programmer. Implement the mechanic from the designer\'s plan: touch only the files you need, keep the diff minimal; put numbers (speed, damage, cooldowns) in constants or config; take texts and data from the content writer. Check the project builds. If the reviewer sent remarks, fix only those. Answer briefly: what changed and where.'), { role: ru ? 'Кодер' : 'Coder', effort: 'medium' }),
+          m('t', 1320, 40, 'claude', S, unity + (ru ? 'Ты тестировщик. Запусти Check.bat. При ошибках сам исправь причину минимальным diff и повтори до зелёного (до 3 раз). Ответь: что падало, что поправил, итог последнего запуска.' : 'You are the tester. Run Check.bat. On errors fix the cause yourself with a minimal diff and rerun until green (up to 3 times). Answer: what failed, what you fixed, the result of the last run.'), { role: tester[lang] }),
+          m('c', 1640, 40, 'claude', 'claude-opus-5-5', ru ? 'Ты ревьюер игры. Проверь код против плана: механика работает как описано, нет магических чисел, нет тяжёлой логики и аллокаций в каждом кадре, нет сломанных ссылок на ассеты. Если годится — OK, иначе конкретно что поправить. Код не переписывай.' : 'You are the game reviewer. Check the code against the plan: the mechanic works as described, no magic numbers, no heavy logic or allocations every frame, no broken asset references. If fine, OK; otherwise exactly what to change. Do not rewrite the code.', { role: reviewer[lang], review: 2, tools: READ_ONLY, effort: 'medium' }),
+          // The 3D blocks are the ones of the 3D template. Letters: G builds the GLB, H opens it in Blender (the lead does not brief H), I warms up Hunyuan while the artist draws.
+          { ...three.nodes.find((x) => x.id === 'b')!, id: 'p', x: 1000, y: 300, role: ru ? 'Сборщик 3D' : '3D builder', text: home + (ru ? 'Если лид написал «пропусти», ответь «пропуск» и ничего не запускай.\n\n' : 'If the lead wrote "skip", answer "skipped" and run nothing.\n\n') + (ru ? 'image_to_3d.py запускай с флагом --mv: модель читает Front, Side и Back, а не один вид. Если он сообщит, что на листе меньше трёх видов, повтори без --mv.\n\n' : 'Run image_to_3d.py with the --mv flag: the model reads Front, Side and Back, not one view. If it says the sheet has fewer than three views, rerun without --mv.\n\n') + (ru ? 'В конце скопируй готовый GLB в Assets/Models/ текущего проекта (создай папку) и назови оба пути.' : 'At the end copy the finished GLB into Assets/Models/ of the current project (create the folder) and give both paths.') + "\n\n" + three.nodes.find((x) => x.id === 'b')!.text },
+          { ...three.nodes.find((x) => x.id === 's')!, id: 'v', x: 1320, y: 300, text: home + (ru ? 'Если сборщик пропустил, ответь «нечего показывать» и ничего не запускай.\n\n' : 'If the builder skipped, answer "nothing to show" and run nothing.\n\n') + three.nodes.find((x) => x.id === 's')!.text },
+          { ...three.nodes.find((x) => x.id === 'w')!, id: 'k', x: 680, y: 560, text: home + (ru ? 'Если лид написал «пропусти», ответь «пропуск» и ничего не запускай.\n\n' : 'If the lead wrote "skip", answer "skipped" and run nothing.\n\n') + three.nodes.find((x) => x.id === 'w')!.text },
+        ],
+        edges: [['l', 'g'], ['l', 'n'], ['l', 'w'], ['l', 'b'], ['g', 'w'], ['g', 'b'], ['n', 'b'], ['w', 'b'], ['b', 't'], ['t', 'c'], ['l', 'p'], ['n', 'p'], ['p', 'v'], ['l', 'k']],
+      } satisfies Template
+    })(),
   ]
 }
 const TPL = 'desovault.orchestra.templates' // global: shared by every project
@@ -63,16 +124,20 @@ const RUNS_KEPT = 5
 const SLOW = 120 // seconds a block may run before its timer turns to a warning
 const k = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`)
 
+const GRID = 24, CW = 3000, CH = 2000, MM = 0.06 // snap step, canvas size, minimap scale
+const HUE = { claude: 'var(--m6)', agy: 'var(--m3)', deepseek: 'var(--m4)', nano: 'var(--m5)', codex: 'var(--m7)' } as const
+const hue = (n: Node) => (n.kind === 'rules' ? 'var(--mut)' : HUE[n.agent ?? 'claude'])
 const W = 272, HEAD = 20 // node width; y of the link handles, measured from the node's top
 const uid = () => Math.random().toString(36).slice(2, 9)
 const fresh = (n: number): Orch => ({ id: uid(), name: `Orchestra ${n}`, task: '', nodes: [], edges: [], iso: inTauri })
 // Older saves may hold more than one start block; keep the first.
 const dedupe = (o: Orch): Orch => { const keep = o.nodes.filter((n, i) => n.kind !== 'start' || i === o.nodes.findIndex((x) => x.kind === 'start')); return { ...o, nodes: keep, edges: o.edges.filter((e) => e.every((id) => keep.some((n) => n.id === id))) } }
 const load = (k: string): Orch[] => { try { const v = JSON.parse(localStorage.getItem(k) ?? ''); if (v.length) return (v as Orch[]).map((o) => dedupe({ ...o, nodes: o.nodes.map((n) => (n.state === 'run' ? { ...n, state: undefined } : n)) })) } catch { /* first run */ } return [fresh(1)] }
+const tb = 'btn-press p-1.5 rounded-lg text-dim hover:text-fg hover:bg-panel'
 const field = 'px-3 py-1.5 rounded-lg bg-field border border-line focus:border-accent outline-none text-xs placeholder:text-dim'
 
 export default function Orchestra({ notes, project, onMenu }: { notes: Note[]; project: string; onMenu: (e: React.MouseEvent, items: MenuItem[]) => void }) {
-  const { t, lang } = useI18n()
+  const { t, lang, hideOut, smooth } = useI18n()
   const KEY = `desovault.orchestra.${project}`
   const [orchs, setOrchs] = useState(() => load(KEY))
   const [aid, setAid] = useState(orchs[0].id)
@@ -83,6 +148,11 @@ export default function Orchestra({ notes, project, onMenu }: { notes: Note[]; p
   const stopped = useRef(false) // Stop was pressed: blocks not started yet stay idle
   const [agy, setAgy] = useState<readonly (readonly [string, string])[]>(MODELS.agy)
   const canvas = useRef<HTMLDivElement>(null)
+  const [z, setZ] = useState(1) // canvas zoom
+  const zRef = useRef(1)
+  const anchor = useRef<[number, number] | null>(null) // scroll to apply once the zoomed canvas has its new size
+  const [snap, setSnap] = useState(true)
+  const [wireTo, setWireTo] = useState('') // block under the link being dragged
   const saveWarned = useRef(false) // warn about a failed save once, not on every render
   useEffect(() => {
     const r = save(KEY, orchs)
@@ -101,7 +171,7 @@ export default function Orchestra({ notes, project, onMenu }: { notes: Note[]; p
     upd((c) => ({ ...c, log: [...(c.log ?? []), { ...e, at: Date.now() }].slice(-LOG_MAX) }))
   }
   const newFromTemplate = (v: string) => {
-    const tpl = (v[0] === 'b' ? builtin(lang) : saved)[+v.slice(1)]
+    const tpl = (v[0] === 'b' ? tpls() : saved)[+v.slice(1)]
     if (!tpl) return
     const c: Orch = { ...fresh(orchs.length + 1), name: tpl.name, ...fromTemplate(tpl, uid) }
     setOrchs([...orchs, c]); setAid(c.id)
@@ -112,6 +182,16 @@ export default function Orchestra({ notes, project, onMenu }: { notes: Note[]; p
     setSaved(next)
     try { localStorage.setItem(TPL, JSON.stringify(next)) } catch (e) { console.error(e) }
   }
+  const deleteTemplate = (i: number) => {
+    const next = saved.filter((_, j) => j !== i)
+    setSaved(next)
+    try { localStorage.setItem(TPL, JSON.stringify(next)) } catch (e) { console.error(e) }
+  }
+  // Pictures go onto a block: only that block's agent sees them.
+  const attach = async (id: string, files: File[]) => {
+    const got = await readPics(files)
+    if (got.length) upd((c) => ({ ...c, nodes: c.nodes.map((n) => (n.id === id ? { ...n, images: [...(n.images ?? []), ...got.map((p) => p.id)] } : n)) }))
+  }
   const applyRole = (n: Node, r: Role | null) => {
     if (!r) return patch(n.id, { role: undefined, review: undefined, tools: undefined })
     const old = ROLES.flatMap((x) => [x.ruText, x.enText]).reduce((s, x) => s.replace(x, ''), n.text).trim() // swapping roles drops the previous role's text, keeps yours
@@ -119,7 +199,8 @@ export default function Orchestra({ notes, project, onMenu }: { notes: Note[]; p
     patch(n.id, { role: r[lang], review: r.review, tools: r.tools, text: old ? `${text}\n\n${old}` : text })
   }
   const patch = (id: string, p: Partial<Node>) => upd((c) => ({ ...c, nodes: c.nodes.map((n) => (n.id === id ? { ...n, ...p } : n)) }))
-  const map = useMemo(() => graphMap(notes), [notes])
+  const slowNotes = useDebounced(notes) // mounted even when hidden: don't rebuild the map on every keystroke elsewhere
+  const map = useMemo(() => graphMap(slowNotes, undefined, '', mapOpts(slowNotes)), [slowNotes])
   const mapTok = useMemo(() => tokens(map), [map])
   const models = (a: Agent): readonly (readonly [string, string])[] => (a === 'claude' ? MODELS.claude : a === 'deepseek' ? DEEPSEEK : a === 'codex' ? CODEX : a === 'nano' ? NANO : agy)
   // An embedded note in full, or, if large, a pointer the agent reads itself (agents run in the project folder with file tools).
@@ -130,7 +211,8 @@ export default function Orchestra({ notes, project, onMenu }: { notes: Note[]; p
     const f = agy.filter(([m]) => m.includes('3.8') && m.includes('flash'))
     return { agent: 'agy', model: (f.find(([m]) => m.endsWith(`-${p.effort}`)) ?? f[0] ?? agy[0])[0], effort: undefined, tools: undefined }
   }
-  const presetLabel = (p: (typeof PRESETS)[number]) => { const m = resolve(p); return `${p[lang]} — ${models(p.agent).find((x) => x[0] === m.model)?.[1] ?? m.model}` }
+  const tpls = () => builtin(lang, resolve(PRESETS[0]).model!, resolve(PRESETS[1]).model!) // the Lead and Task-planning presets
+  const presetLabel =(p: (typeof PRESETS)[number]) => { const m = resolve(p); return `${p[lang]} — ${models(p.agent).find((x) => x[0] === m.model)?.[1] ?? m.model}` }
   const label = (n: Node) => n.kind === 'rules' ? t('blockRules') : `${NAMES[n.agent ?? 'claude']} · ${models(n.agent ?? 'claude').find((m) => m[0] === n.model)?.[1] ?? n.model}`
 
   const letter = (id: string) => String.fromCharCode(65 + o.nodes.filter((n) => n.kind === 'model').findIndex((n) => n.id === id))
@@ -141,15 +223,53 @@ export default function Orchestra({ notes, project, onMenu }: { notes: Note[]; p
   const connect = (from: string, to: string) =>
     upd((c) => (from === to || c.nodes.find((n) => n.id === to)?.kind !== 'model' || c.edges.some((e) => e[0] === from && e[1] === to) ? c : { ...c, edges: [...c.edges, [from, to]] }))
 
+  useLayoutEffect(() => { if (anchor.current) { canvas.current!.scrollLeft = anchor.current[0]; canvas.current!.scrollTop = anchor.current[1]; anchor.current = null } }, [z])
+  const view = (nz: number, sl: number, st: number) => {
+    if (nz === zRef.current) { canvas.current!.scrollLeft = sl; canvas.current!.scrollTop = st; return }
+    anchor.current = [sl, st]; zRef.current = nz; setZ(nz)
+  }
+  // Zoom around a point of the viewport (its centre by default), so what is under the cursor stays put.
+  const zoomTo = (to: number, cx = canvas.current!.clientWidth / 2, cy = canvas.current!.clientHeight / 2) => {
+    const c = canvas.current!, p = zRef.current, nz = Math.min(2, Math.max(0.3, Math.round(to * 100) / 100))
+    const [l, tp] = anchor.current ?? [c.scrollLeft, c.scrollTop]
+    view(nz, (l + cx) / p * nz - cx, (tp + cy) / p * nz - cy)
+  }
+  const zt = useRef(zoomTo); zt.current = zoomTo
+  useEffect(() => { // Ctrl + wheel (or a trackpad pinch) zooms
+    const c = canvas.current!
+    const f = (e: WheelEvent) => { if (!e.ctrlKey && !e.metaKey) return; e.preventDefault(); const r = c.getBoundingClientRect(); zt.current(zRef.current * Math.exp(-e.deltaY / 300), e.clientX - r.left, e.clientY - r.top) }
+    c.addEventListener('wheel', f, { passive: false }); return () => c.removeEventListener('wheel', f)
+  }, [])
+  const fit = () => {
+    const c = canvas.current!, els = [...c.querySelectorAll<HTMLElement>('[data-node]')]
+    if (!els.length) return
+    const x0 = Math.min(...els.map((e) => e.offsetLeft)), y0 = Math.min(...els.map((e) => e.offsetTop))
+    const x1 = Math.max(...els.map((e) => e.offsetLeft + e.offsetWidth)), y1 = Math.max(...els.map((e) => e.offsetTop + e.offsetHeight)), pad = 60
+    const nz = Math.round(Math.min(1, Math.max(0.3, Math.min(c.clientWidth / (x1 - x0 + pad * 2), c.clientHeight / (y1 - y0 + pad * 2)))) * 100) / 100
+    view(nz, (x0 + x1) / 2 * nz - c.clientWidth / 2, (y0 + y1) / 2 * nz - c.clientHeight / 2)
+  }
+  // Layers left to right by link depth; blocks of a layer stack top to bottom. shortcut: keeps the creation order inside a layer, no crossing minimisation.
+  const layout = () => {
+    const h = (id: string) => canvas.current!.querySelector<HTMLElement>(`[data-node="${id}"]`)?.offsetHeight ?? 200
+    const depth: Record<string, number> = {}
+    o.nodes.forEach((n) => { depth[n.id] = 0 })
+    for (let i = 0; i < o.nodes.length; i++) o.edges.forEach(([a, b]) => { depth[b] = Math.min(o.nodes.length, Math.max(depth[b], depth[a] + 1)) }) // bounded, so a loop cannot spin
+    const ys: Record<number, number> = {}, pos: Record<string, [number, number]> = {}
+    o.nodes.forEach((n) => { const d = depth[n.id], y = ys[d] ?? GRID * 2; pos[n.id] = [GRID * 2 + d * (W + GRID * 4), y]; ys[d] = y + h(n.id) + GRID * 2 })
+    upd((c) => ({ ...c, nodes: c.nodes.map((n) => ({ ...n, x: pos[n.id][0], y: pos[n.id][1] })) }))
+    requestAnimationFrame(fit)
+  }
+
   // Drag from an output handle and release over another block to link them.
   const startWire = (from: string, e: React.PointerEvent) => {
     e.preventDefault()
-    const at = (m: { clientX: number; clientY: number }) => { const r = canvas.current!.getBoundingClientRect(); return { from, x: m.clientX - r.left + canvas.current!.scrollLeft, y: m.clientY - r.top + canvas.current!.scrollTop } }
-    const move = (m: PointerEvent) => setWire(at(m))
+    const at = (m: { clientX: number; clientY: number }) => { const r = canvas.current!.getBoundingClientRect(); return { from, x: (m.clientX - r.left + canvas.current!.scrollLeft) / z, y: (m.clientY - r.top + canvas.current!.scrollTop) / z } }
+    const hit = (m: PointerEvent) => document.elementsFromPoint(m.clientX, m.clientY).map((el) => (el as HTMLElement).dataset.node).find(Boolean)
+    const move = (m: PointerEvent) => { setWire(at(m)); const id = hit(m); setWireTo(id && id !== from ? id : '') }
     const up = (m: PointerEvent) => {
       window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up)
-      setWire(null)
-      const to = document.elementsFromPoint(m.clientX, m.clientY).map((el) => (el as HTMLElement).dataset.node).find(Boolean)
+      setWire(null); setWireTo('')
+      const to = hit(m)
       if (to) connect(from, to)
     }
     setWire(at(e))
@@ -158,7 +278,7 @@ export default function Orchestra({ notes, project, onMenu }: { notes: Note[]; p
 
   const canvasMenu = (e: React.MouseEvent) => {
     const r = canvas.current!.getBoundingClientRect()
-    const x = e.clientX - r.left + canvas.current!.scrollLeft, y = e.clientY - r.top + canvas.current!.scrollTop
+    const x = (e.clientX - r.left + canvas.current!.scrollLeft) / z, y = (e.clientY - r.top + canvas.current!.scrollTop) / z
     const items: MenuItem[] = [
       { label: `★ ${lang === 'ru' ? 'Рекомендуемые' : 'Recommended'}`, children: PRESETS.map((p) => ({ label: presetLabel(p), onClick: () => add(x, y, { ...resolve(p), role: p[lang] }) })) },
       { label: 'Claude', children: MODELS.claude.map(([m, l]) => ({ label: l, onClick: () => add(x, y, { agent: 'claude', model: m }) })) },
@@ -183,9 +303,10 @@ export default function Orchestra({ notes, project, onMenu }: { notes: Note[]; p
 
   const drag = (n: Node, e: React.PointerEvent) => {
     if ((e.target as HTMLElement).closest('button,select,input')) return
-    const el = e.currentTarget as HTMLElement, sx = e.clientX - n.x, sy = e.clientY - n.y
+    const el = e.currentTarget as HTMLElement, sx = e.clientX / z - n.x, sy = e.clientY / z - n.y
+    const g = (v: number, free: boolean) => Math.max(0, snap && !free ? Math.round(v / GRID) * GRID : v)
     el.setPointerCapture(e.pointerId)
-    el.onpointermove = (m) => patch(n.id, { x: Math.max(0, m.clientX - sx), y: Math.max(0, m.clientY - sy) })
+    el.onpointermove = (m) => patch(n.id, { x: g(m.clientX / z - sx, m.altKey), y: g(m.clientY / z - sy, m.altKey) })
     el.onpointerup = () => { el.onpointermove = null; el.onpointerup = null }
   }
 
@@ -203,7 +324,7 @@ ${clip(d)}
 \`\`\`` : t('orchNoChanges') }); return }
       if (what === 'discard' && !window.confirm(t('orchDiscardAsk'))) return
       const changed = what === 'apply' ? await worktreeApply(o.id) : (await worktreeDiscard(o.id), false)
-      upd((c) => ({ ...c, wt: false, nodes: c.nodes.map((n) => ({ ...n, sid: undefined, sum: undefined })) })) // sessions and cached answers belonged to the worktree
+      upd((c) => ({ ...c, wt: false, nodes: c.nodes.map((n) => ({ ...n, sid: undefined, sum: undefined, readSum: undefined })) })) // sessions and cached answers belonged to the worktree
       addLog({ from: 'git', to: '', kind: 'reply', text: what === 'apply' ? t(changed ? 'orchApplied' : 'orchNoChanges') : t('orchDiscarded') })
     } catch (e) { addLog({ from: 'git', to: '', text: String(e), kind: 'error' }) }
   }
@@ -213,7 +334,9 @@ ${clip(d)}
     exec, patch, addLog, history, embed, label, who, t,
     stamp: () => (inTauri ? worktreeStamp(o.iso ? o.id : undefined) : Promise.resolve('')),
     stopped: () => stopped.current,
-    leadMap: (query) => graphMap(notes, undefined, query),
+    leadMap: (query) => graphMap(notes, undefined, query, mapOpts(notes)),
+    subMap: (text) => subMap(notes, text, coRead()),
+    filesStamp: (paths) => (inTauri ? filesStamp(paths, o.iso ? o.id : undefined) : Promise.resolve('')),
   })
   // `msg` = something you wrote to the lead: the lead takes it as a new instruction and briefs every agent again.
   // force (Shift+click on Run): rerun every block, even one whose input has not changed.
@@ -235,14 +358,17 @@ ${clip(d)}
   // keep: continue the block's claude session (--resume) instead of resending the dialogue. agy gets the full prompt every time:
   // its --conversation resume was ~8x slower than a fresh call when tried.
   const exec = async (n: Node, build: (resumed: boolean) => string, { keep, tools, effort = '', maxTurns }: Opts = {}): Promise<Reply> => {
-    if (n.agent === 'nano') return nano(n.model ?? NANO[0][0], build(false))
+    if (n.agent === 'nano') return nano(n.model ?? NANO[0][0], build(false), n.images)
+    if (n.agent === 'deepseek' && n.images?.length) throw new Error(t('noImagesDs'))
     if (n.agent === 'deepseek') return deepseek(n.model ?? DEEPSEEK[0][0], build(false))
     if (!inTauri) throw new Error(t('desktopOnly'))
     const cli = n.agent === 'agy' || n.agent === 'codex' ? n.agent : 'claude'
     const go = async (resumed: boolean, session?: string) => {
-      const prompt = build(resumed)
-      if (!prompt.trim()) throw new Error(t('orchNoInput'))
+      const base = build(resumed)
+      if (!base.trim()) throw new Error(t('orchNoInput'))
+      const prompt = base + (n.images?.length ? picNote(await Promise.all(n.images.map(picPath))) : '') // the CLIs read pictures by path
       const a = await runAgent(cli, prompt, n.model ?? MODELS.claude[0][0], cli !== 'claude' ? '' : effort, { session, resume: resumed, tools, system: BRIEF, budget: BUDGET, maxTurns, worktree: o.iso ? o.id : undefined })
+      recordRead(a.files) // the map learns which files agents really open
       return { ...a, text: a.text.trim() }
     }
     if (cli !== 'claude' || !keep) return go(false)
@@ -265,12 +391,16 @@ ${clip(d)}
   }
 
   // Nano Banana (Gemini image models): the answer is text plus an inline image, shown in the block and the dialogue.
-  const nano = async (model: string, prompt: string): Promise<Answer & { img?: string }> => {
-    const key = getKey('agy') // the Gemini API key, shared with the chat sidebar
-    if (!key) throw new Error(t('gemNoKey'))
+  const nano = async (model: string, prompt: string, images: string[] = []): Promise<Answer & { img?: string }> => {
+    const key = getKey('agy') // the Gemini API key, shared with the chat sidebar; without one the Antigravity CLI draws
+    if (!key && !inTauri) throw new Error(t('gemNoKey'))
     if (!prompt.trim()) throw new Error(t('orchNoInput'))
-    const { text, img, input, output } = await nanoImage(key, model, [{ role: 'user', text: prompt }])
-    return { text, img, input, cached: 0, output, cost: 0 }
+    const imgs = (await Promise.all(images.map((i) => getImg(i)))).flatMap((d) => d ?? [])
+    const r = key ? { ...(await nanoImage(key, model, [{ role: 'user', text: prompt, imgs }])), cached: 0, cost: 0 } : await nanoAgy(prompt, imgs)
+    if (!inTauri) return r
+    // The next blocks get the picture as a file they can open, not the generator's chatter (the CLI's text is often "Waiting for…").
+    const file = await saveImage(imgId(), r.img.slice(11, r.img.indexOf(';')), Array.from(atob(r.img.split(',')[1]), (c) => c.charCodeAt(0)))
+    return { ...r, text: `Image file: ${file}${key ? `\n${r.text}` : ''}` }
   }
 
   // A message from you to one agent (the lead or any block): it answers with its own context plus its share of the saved dialogue.
@@ -307,62 +437,79 @@ ${clip(d)}
   // Input tokens only: the task, each block's context and notes, and the project map for the lead. The answers come on top.
   const est = o.nodes.reduce((a, n) => n.kind === 'rules' ? a : a + tokens(`${o.task} ${n.text}`) + (n.kind === 'start' ? mapTok : n.notes.reduce((s, x) => { const c = notes.find((q) => q.name === x)?.content ?? ''; return s + (c.length > NOTE_MAX ? 50 : tokens(c)) }, 0)), 0)
   const pos = (id: string, side: 'in' | 'out') => { const n = o.nodes.find((x) => x.id === id)!; return [n.x + (side === 'out' ? W : 0), n.y + HEAD] }
-  const dot = 'absolute top-[14px] w-3 h-3 rounded-full border-2 border-accent bg-surface'
+  const dot = 'port absolute top-[14px] w-3 h-3 rounded-full border-2 bg-surface'
 
   return (
     <div className="h-full flex">
     <div className="flex-1 min-w-0 flex flex-col relative">
       <div className="flex items-center gap-2 px-5 h-12 border-b border-line">
-        <select value={o.id} onChange={(e) => setAid(e.target.value)} className={`${field} w-40`}>{orchs.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
-        <button title={t('orchNew')} onClick={() => { const c = fresh(orchs.length + 1); setOrchs([...orchs, c]); setAid(c.id) }} className="btn-press p-1.5 rounded-lg text-dim hover:text-fg hover:bg-panel"><Plus size={15} /></button>
-        <button title={t('delete')} disabled={orchs.length < 2} onClick={() => { const rest = orchs.filter((x) => x !== o); setOrchs(rest); setAid(rest[0].id) }} className="btn-press p-1.5 rounded-lg text-dim hover:text-status-err disabled:opacity-30"><Trash2 size={15} /></button>
-        <input value={o.name} onChange={(e) => upd((c) => ({ ...c, name: e.target.value }))} placeholder={t('orchName')} className={`${field} w-44`} />
-        <button title={t('orchIsoTip')} onClick={() => upd((c) => ({ ...c, iso: !c.iso }))} disabled={running || !inTauri} className={`btn-press flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs border ${o.iso ? 'border-accent text-accent' : 'border-line text-dim'} disabled:opacity-40`}><GitBranch size={13} />{t('orchIso')}</button>
-        <select value="" onChange={(e) => newFromTemplate(e.target.value)} title={t('orchTpl')} className={`${field} w-32`}>
-          <option value="">{t('orchTpl')}</option>
-          <optgroup label={t('orchTplBuiltin')}>{builtin(lang).map((x, i) => <option key={i} value={`b${i}`} className="bg-panel">{x.name}</option>)}</optgroup>
-          {saved.length > 0 && <optgroup label={t('orchTplSaved')}>{saved.map((x, i) => <option key={i} value={`s${i}`} className="bg-panel">{x.name}</option>)}</optgroup>}
-        </select>
-        <button title={t('orchTplSave')} onClick={saveTemplate} className="btn-press p-1.5 rounded-lg text-dim hover:text-fg hover:bg-panel"><BookmarkPlus size={15} /></button>
-        {o.iso && o.wt && !running && <>{(['diff', 'apply', 'discard'] as const).map((w) => <button key={w} onClick={() => review(w)} className={`btn-press px-2.5 py-1.5 rounded-lg text-xs border border-line ${w === 'discard' ? 'text-dim hover:text-status-err' : 'text-fg hover:border-accent'}`}>{t(w === 'diff' ? 'orchDiff' : w === 'apply' ? 'orchApply' : 'orchDiscard')}</button>)}</>}
+        <select value={o.id} onChange={(e) => setAid(e.target.value)} className={`${field} w-36`}>{orchs.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
+        <input value={o.name} onChange={(e) => upd((c) => ({ ...c, name: e.target.value }))} placeholder={t('orchName')} className={`${field} w-40`} />
+        <button title={t('orchNew')} onClick={() => { const c = fresh(orchs.length + 1); setOrchs([...orchs, c]); setAid(c.id) }} className={tb}><Plus size={15} /></button>
+        <button title={t('orchIsoTip')} onClick={() => upd((c) => ({ ...c, iso: !c.iso }))} disabled={running || !inTauri} className={`${tb} disabled:opacity-40 ${o.iso ? 'text-accent bg-accent-dim' : ''}`}><GitBranch size={15} /></button>
+        {o.iso && o.wt && !running && <div className="flex rounded-lg border border-line overflow-hidden text-xs divide-x divide-line">{(['diff', 'apply', 'discard'] as const).map((w) => <button key={w} onClick={() => review(w)} className={`px-2.5 py-1 hover:bg-panel ${w === 'discard' ? 'text-dim hover:text-status-err' : 'text-fg'}`}>{t(w === 'diff' ? 'orchDiff' : w === 'apply' ? 'orchApply' : 'orchDiscard')}</button>)}</div>}
+        <span className="ml-auto" />
         {!running && est > 0 && <span title={t('orchEstTip')} className="text-micro text-dim tabular-nums shrink-0">≈ ↑{k(est)}</span>}
-        <button title={t('orchRuns')} onClick={() => setShowRuns((v) => !v)} className={`btn-press p-1.5 rounded-lg hover:text-fg hover:bg-panel ${showRuns ? 'text-fg bg-panel' : 'text-dim'}`}><History size={15} /></button>
         {spent.n > 0 && <span title={t('orchUseTip')} className="text-micro text-dim tabular-nums shrink-0">↑{k(spent.input)} ⟳{k(spent.cached)} ↓{k(spent.output)}{spent.cost > 0 && ` · $${spent.cost.toFixed(2)}`}</span>}
+        <button title={t('orchRuns')} onClick={() => setShowRuns((v) => !v)} className={`${tb} ${showRuns ? 'text-fg bg-panel' : ''}`}><History size={15} /></button>
+        <button onClick={(e) => onMenu(e, [
+          { label: t('orchTpl'), children: [...tpls().map((x, i) => ({ label: x.name, onClick: () => newFromTemplate(`b${i}`) })), ...saved.map((x, i) => ({ label: x.name, sep: i === 0, onClick: () => newFromTemplate(`s${i}`) }))] },
+          { label: t('orchTplSave'), onClick: saveTemplate },
+          ...(saved.length ? [{ label: t('orchTplDel'), danger: true, children: saved.map((x, i) => ({ label: x.name, danger: true, onClick: () => deleteTemplate(i) })) }] : []),
+          // the last orchestra can go too: an empty one takes its place
+          { label: t('delete'), danger: true, sep: true, disabled: running, onClick: () => { const rest = orchs.filter((x) => x !== o); const next = rest.length ? rest : [fresh(1)]; setOrchs(next); setAid(next[0].id) } }])} className={tb}><MoreHorizontal size={15} /></button>
       </div>
       {showRuns && <div className="anim-fade absolute right-4 top-12 z-20 w-96 max-h-80 overflow-auto rounded-xl bg-surface border border-line shadow-float p-3 flex flex-col gap-2 text-xs">
         {(o.runs ?? []).length === 0 ? <p className="text-dim">{t('orchRunsEmpty')}</p> : [...(o.runs ?? [])].reverse().map((r) => (
           <details key={r.at}><summary className="cursor-pointer tabular-nums">{hm(r.at)} · {k(r.tokens)} tok{r.cost > 0 && ` · $${r.cost.toFixed(2)}`}{r.failed.length > 0 && <span className="text-status-err"> · ✕ {r.failed.join(', ')}</span>}</summary>
             {r.final && <pre className="mt-1 whitespace-pre-wrap text-micro text-mut">{r.final}</pre>}</details>))}
       </div>}
-      <div ref={canvas} onPointerDown={pan} onContextMenu={canvasMenu} className="flex-1 min-h-0 overflow-auto relative cursor-grab">
-        <div className="relative" style={{ width: 3000, height: 2000 }}>
+      <div className="flex-1 min-h-0 relative">
+      <div ref={canvas} onPointerDown={pan} onContextMenu={canvasMenu} className="absolute inset-0 overflow-auto cursor-grab">
+        <div style={{ width: CW * z, height: CH * z }}>
+        <div className="relative origin-top-left" style={{ width: CW, height: CH, transform: `scale(${z})`, backgroundImage: 'radial-gradient(circle, var(--line2) 1.2px, transparent 1.5px)', backgroundSize: `${GRID}px ${GRID}px`, backgroundPosition: `-${GRID / 2}px -${GRID / 2}px` }}>
           <svg className="absolute inset-0 w-full h-full pointer-events-none">
+            <defs><filter id="eglow" x="-20%" y="-50%" width="140%" height="200%"><feGaussianBlur stdDeviation="4" /></filter></defs>
             {o.edges.map(([a, b]) => {
+              const A = o.nodes.find((x) => x.id === a)!, B = o.nodes.find((x) => x.id === b)!
               const [x1, y1] = pos(a, 'out'), [x2, y2] = pos(b, 'in'), dx = Math.max(50, Math.abs(x2 - x1) / 2)
               const d = `M${x1} ${y1} C${x1 + dx} ${y1} ${x2 - dx} ${y2} ${x2} ${y2}`
               const ck = `${a}>${b}`, cond = o.cond?.[ck], next = { undefined: 'ok', ok: 'bad', bad: undefined }[String(cond) as 'undefined' | 'ok' | 'bad'] as 'ok' | 'bad' | undefined
-              return <g key={a + b}><path d={d} fill="none" stroke="var(--accent)" strokeWidth="2" opacity=".9" strokeDasharray={cond ? '6 4' : undefined} />
-                {cond && <text x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 6} textAnchor="middle" fontSize="11" fill="var(--accent)" className="pointer-events-none">{t(cond === 'ok' ? 'orchEdgeOk' : 'orchEdgeBad')}</text>}
-                <path d={d} fill="none" stroke="transparent" strokeWidth="12" className="pointer-events-auto cursor-pointer"
+              const err = B.state === 'err', live = A.state === 'run' || B.state === 'run', gid = `eg-${a}-${b}`
+              const stroke = err ? 'var(--status-err)' : `url(#${gid})`, op = live ? 1 : A.state === 'ok' && B.state === 'ok' ? 0.95 : 0.6
+              const label = cond ? t(cond === 'ok' ? 'orchEdgeOk' : 'orchEdgeBad') : '', lw = label.length * 6.4 + 16, mx = (x1 + x2) / 2, my = (y1 + y2) / 2
+              return <g key={a + b} className="edge">
+                <linearGradient id={gid} gradientUnits="userSpaceOnUse" x1={x1} y1={y1} x2={x2 === x1 ? x2 + 1 : x2} y2={y2}><stop offset="0" stopColor={hue(A)} /><stop offset="1" stopColor={hue(B)} /></linearGradient>
+                <path d={d} fill="none" stroke={stroke} strokeWidth="6" opacity={live ? 0.4 : 0.14} filter="url(#eglow)" />
+                <path d={d} fill="none" stroke={stroke} strokeWidth="2" opacity={op} strokeDasharray={cond ? '6 4' : undefined} pathLength={cond ? undefined : 1} className={`line${cond ? '' : ' draw'}`} />
+                {live && !err && <path d={d} fill="none" stroke="var(--fg)" strokeWidth="2" strokeOpacity=".65" strokeDasharray="6 18" className="pulse" />}
+                {live && !err && smooth && <circle r="3.5" fill="var(--fg)" style={{ filter: 'drop-shadow(0 0 4px var(--fg))' }}><animateMotion dur="1.8s" repeatCount="indefinite" path={d} /></circle>}
+                <polygon points={`${x2 - 15},${y2 - 4.5} ${x2 - 7},${y2} ${x2 - 15},${y2 + 4.5}`} fill={err ? 'var(--status-err)' : hue(B)} opacity={op} />
+                {cond && <g className="pointer-events-none"><rect x={mx - lw / 2} y={my - 10} width={lw} height="20" rx="10" fill="var(--surface)" stroke="var(--accent)" /><text x={mx} y={my + 4} textAnchor="middle" fontSize="11" fill="var(--accent)">{label}</text></g>}
+                <path d={d} fill="none" stroke="transparent" strokeWidth="14" className="pointer-events-auto cursor-pointer"
                   onClick={() => upd((c) => { const { [ck]: _, ...rest } = c.cond ?? {}; return { ...c, cond: next ? { ...rest, [ck]: next } : rest } })}
                   onContextMenu={(e) => onMenu(e, [{ label: t('orchUnlink'), danger: true, onClick: () => upd((c) => ({ ...c, edges: c.edges.filter((x) => !(x[0] === a && x[1] === b)) })) }])}><title>{t('orchEdgeTip')}</title></path></g>
             })}
-            {wire && (() => { const [x1, y1] = pos(wire.from, 'out'); return <path d={`M${x1} ${y1} L${wire.x} ${wire.y}`} stroke="var(--accent)" strokeWidth="2" strokeDasharray="5 4" fill="none" /> })()}
+            {wire && (() => { const [x1, y1] = pos(wire.from, 'out'), c = hue(o.nodes.find((x) => x.id === wire.from)!); return <path d={`M${x1} ${y1} L${wire.x} ${wire.y}`} stroke={c} strokeWidth="2.5" strokeDasharray={wireTo ? undefined : '5 4'} fill="none" style={{ filter: `drop-shadow(0 0 5px ${c})` }} /> })()}
           </svg>
           <p className="absolute left-[340px] top-12 text-dim pointer-events-none">{t('orchEmpty')}</p>
           {o.nodes.map((n) => (
             <div key={n.id} data-node={n.id} onContextMenu={(e) => n.kind === 'start' ? e.stopPropagation() : onMenu(e, [{ label: t('delete'), danger: true, onClick: () => remove(n.id) }])}
-              style={{ left: n.x, top: n.y, width: W }} className={`absolute rounded-2xl bg-surface border shadow-float flex flex-col ${n.state === 'err' ? 'border-status-err' : n.state === 'run' ? 'border-accent animate-pulse' : 'border-line'}`}>
-              <div onPointerDown={(e) => drag(n, e)} className="flex items-center gap-1.5 pl-5 pr-3 h-11 cursor-grab active:cursor-grabbing select-none border-b border-line">
-                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${n.kind === 'rules' ? 'bg-mut' : (n.agent ?? 'claude') === 'claude' ? 'bg-accent' : n.agent === 'agy' ? 'bg-status-ok' : 'bg-fg'}`} />
+              style={{ left: n.x, top: n.y, width: W }} className={`group card-in absolute rounded-2xl bg-surface border shadow-float flex flex-col ${n.state === 'err' ? 'border-status-err node-err' : n.state === 'run' ? 'border-accent node-run' : wireTo === n.id && n.kind === 'model' ? 'border-accent ring-2 ring-accent' : 'border-line'}`}>
+              <div onPointerDown={(e) => drag(n, e)} style={{ backgroundImage: `linear-gradient(90deg, color-mix(in srgb, ${hue(n)} 16%, transparent), transparent 70%)` }} className="flex items-center gap-1.5 pl-5 pr-3 h-11 rounded-t-2xl cursor-grab active:cursor-grabbing select-none border-b border-line">
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: hue(n), boxShadow: `0 0 8px ${hue(n)}` }} />
                 {n.kind === 'rules' ? <span className="text-xs truncate">{label(n)}</span>
                   : <>
                     {n.kind === 'start' ? <span className="text-micro text-accent shrink-0">{t('blockStart')}</span> : <span className="text-micro text-accent shrink-0">{String.fromCharCode(65 + o.nodes.filter((x) => x.kind === 'model').findIndex((x) => x.id === n.id))}</span>}
                     <input value={n.name ?? ''} onChange={(e) => patch(n.id, { name: e.target.value })} placeholder={t('orchNamePh')} spellCheck={false}
                       className="min-w-0 flex-1 bg-transparent text-sm font-medium outline-none placeholder:text-dim placeholder:font-normal" />
                   </>}
-                <button title={t('orchRerun')} disabled={running} onClick={() => run(undefined, false, n.id)} className={`p-1 rounded text-dim hover:text-accent disabled:opacity-30 ${n.kind === 'start' ? 'ml-auto' : ''}`}><RotateCcw size={12} /></button>
-                {n.kind !== 'start' && <button title={t('delete')} onClick={() => remove(n.id)} className="p-1 rounded text-dim hover:text-status-err"><X size={12} /></button>}
+                <span className="ml-auto flex items-center gap-0.5 shrink-0">
+                  {n.state && <span className={`w-2 h-2 mr-1 rounded-full ${DOT[n.state]}`} />}
+                  <button title={t('orchCompact')} onClick={() => patch(n.id, { compact: !n.compact })} className="p-1 rounded text-dim hover:text-fg opacity-0 group-hover:opacity-100">{n.compact ? <ChevronsUpDown size={12} /> : <ChevronsDownUp size={12} />}</button>
+                  <button title={t('orchRerun')} disabled={running} onClick={() => run(undefined, false, n.id)} className="p-1 rounded text-dim hover:text-accent disabled:opacity-30 opacity-0 group-hover:opacity-100"><RotateCcw size={12} /></button>
+                  {n.kind !== 'start' && <button title={t('delete')} onClick={() => remove(n.id)} className="p-1 rounded text-dim hover:text-status-err opacity-0 group-hover:opacity-100"><X size={12} /></button>}
+                </span>
               </div>
               {n.kind !== 'rules' && <div className="flex items-center gap-1.5 px-5 py-1.5 border-b border-line min-w-0">
                   <select value={`${n.agent ?? 'claude'}:${n.model ?? MODELS.claude[0][0]}`} onChange={(e) => { if (e.target.value.startsWith('preset:')) return patch(n.id, { ...resolve(PRESETS[+e.target.value.slice(7)]), role: PRESETS[+e.target.value.slice(7)][lang], review: undefined }); const [agent, model] = e.target.value.split(':') as [Agent, string]; patch(n.id, { agent, model, role: undefined, tools: undefined, review: undefined, ...(agent !== 'claude' && { effort: undefined }) }) }}
@@ -376,36 +523,77 @@ ${clip(d)}
                   ...ROLES.map((r) => ({ label: r[lang], onClick: () => applyRole(n, r) })),
                   { label: t('orchNoRole'), sep: true, onClick: () => applyRole(n, null) }])} className="btn-press ml-auto p-0.5 rounded text-dim hover:text-accent shrink-0"><Plus size={13} /></button>}
               </div>}
-              {n.kind === 'model' && <span title={t('orchIn')} className={`${dot} -left-1.5 pointer-events-none`} />}
-              <button title={t('orchOut')} onPointerDown={(e) => startWire(n.id, e)} className={`${dot} -right-1.5 cursor-crosshair`} />
-              <div className="p-3 flex flex-col gap-2">
+              {n.kind === 'model' && <span title={t('orchIn')} style={{ borderColor: hue(n), color: hue(n) }} className={`${dot} -left-1.5 pointer-events-none`} />}
+              <button title={t('orchOut')} onPointerDown={(e) => startWire(n.id, e)} style={{ borderColor: hue(n), color: hue(n) }} className={`${dot} -right-1.5 cursor-crosshair`} />
+              {n.compact ? <div className="px-5 py-2.5 flex items-center gap-2 text-micro text-dim min-w-0">
+                <span className="truncate flex-1">{n.text.split(/\r?\n/)[0] || '—'}</span>
+                {n.state === 'run' && n.since && <Elapsed since={n.since} />}
+                {n.use && <span className="tabular-nums shrink-0">{n.use.same ? t('orchSame') : `↑${k(n.use.input)} ↓${k(n.use.output)}`}</span>}
+              </div> : <div className="p-3 flex flex-col gap-2">
                 <textarea value={n.text} onChange={(e) => patch(n.id, { text: e.target.value })} rows={3} spellCheck={false}
                   placeholder={n.kind === 'rules' ? t('orchRulesPh') : n.kind === 'start' ? t('orchStartPh') : t('orchCtxPh')} className={`${field} resize-none`} />
-                {n.kind !== 'rules' && (n.agent ?? 'claude') === 'claude' && <select value={n.effort ?? (n.kind === 'start' ? 'low' : '')} onChange={(e) => patch(n.id, { effort: e.target.value || undefined })} title={t('orchEffort')} className={field}>
-                  {n.kind !== 'start' && <option value="">{t('orchEffort')}: auto</option>}{EFFORTS.map((x) => <option key={x} value={x}>{t('orchEffort')}: {x}</option>)}</select>}
+                {n.kind !== 'rules' && <div className="flex items-center gap-1.5 min-w-0">
+                  <label title={t('attachImage')} className="btn-press p-1 rounded text-dim hover:text-accent cursor-pointer shrink-0"><Paperclip size={13} />
+                    <input type="file" accept="image/*" multiple hidden onChange={(e) => { attach(n.id, [...(e.target.files ?? [])]); e.target.value = '' }} /></label>
+                  {(n.agent ?? 'claude') === 'claude' && <select value={n.effort ?? (n.kind === 'start' ? 'low' : '')} onChange={(e) => patch(n.id, { effort: e.target.value || undefined })} title={t('orchEffort')} className={`${field} min-w-0 flex-1`}>
+                    {n.kind !== 'start' && <option value="">{t('orchEffort')}: auto</option>}{EFFORTS.map((x) => <option key={x} value={x}>{t('orchEffort')}: {x}</option>)}</select>}
+                  {n.kind === 'model' && <select value="" onChange={(e) => e.target.value && patch(n.id, { notes: [...n.notes, e.target.value] })} className={`${field} min-w-0 flex-1`}>
+                    <option value="">{t('orchEmbed')}</option>
+                    {notes.filter((x) => !n.notes.includes(x.name)).map((x) => <option key={x.name} value={x.name}>@{x.name}</option>)}
+                  </select>}
+                </div>}
+                {n.images && n.images.length > 0 && <div className="flex flex-wrap gap-1.5">{n.images.map((id) => <span key={id} className="relative"><StoredImg id={id} plain cls="h-10 w-10 object-cover rounded-md border border-line" />
+                  <button onClick={() => patch(n.id, { images: n.images!.length > 1 ? n.images!.filter((x) => x !== id) : undefined })} className="absolute -top-1 -right-1 p-0.5 rounded-full bg-surface border border-line text-dim hover:text-status-err"><X size={9} /></button></span>)}</div>}
                 {n.kind === 'start' && <span className="text-micro text-dim">{t('orchMapCtx', { n: notes.length, k: mapTok })}</span>}
                 {n.state === 'run' && n.since && <Elapsed since={n.since} />}
                 {n.use && <span title={t('orchUseTip')} className="text-micro text-dim tabular-nums">{n.use.same ? t('orchSame') : `↑${k(n.use.input)} ⟳${k(n.use.cached)} ↓${k(n.use.output)}${n.use.cost > 0 ? ` · $${n.use.cost.toFixed(3)}` : ''}`}</span>}
-                {n.kind === 'start' && n.out && <pre className={`max-h-48 overflow-auto whitespace-pre-wrap text-micro p-2 rounded-lg bg-field ${n.state === 'err' ? 'text-status-err' : 'text-mut'}`}>{n.out}</pre>}
+                {n.kind === 'start' && n.out && (!hideOut || n.state === 'err') && <pre className={`max-h-48 overflow-auto whitespace-pre-wrap text-micro p-2 rounded-lg bg-field ${n.state === 'err' ? 'text-status-err' : 'text-mut'}`}>{n.out}</pre>}
                 {n.kind === 'start' && n.final && <pre className="max-h-48 overflow-auto whitespace-pre-wrap text-micro p-2 rounded-lg bg-accent-dim text-fg">{n.final}</pre>}
                 {n.kind === 'model' && <>
                   {n.notes.length > 0 && <div className="flex flex-wrap gap-1">{n.notes.map((x) => (
                     <button key={x} title={t('delete')} onClick={() => patch(n.id, { notes: n.notes.filter((k) => k !== x) })} className="px-2 py-0.5 rounded-full bg-accent-dim text-accent text-micro">@{x} ×</button>))}</div>}
-                  <select value="" onChange={(e) => e.target.value && patch(n.id, { notes: [...n.notes, e.target.value] })} className={field}>
-                    <option value="">{t('orchEmbed')}</option>
-                    {notes.filter((x) => !n.notes.includes(x.name)).map((x) => <option key={x.name} value={x.name}>@{x.name}</option>)}
-                  </select>
                   {n.img && <a href={n.img} download="nano-banana.png" title="Save"><img src={n.img} className="rounded-lg w-full" /></a>}
-                  {n.out && <pre className={`max-h-48 overflow-auto whitespace-pre-wrap text-micro p-2 rounded-lg bg-field ${n.state === 'err' ? 'text-status-err' : 'text-mut'}`}>{n.out}</pre>}
+                  {n.out && (!hideOut || n.state === 'err') && <pre className={`max-h-48 overflow-auto whitespace-pre-wrap text-micro p-2 rounded-lg bg-field ${n.state === 'err' ? 'text-status-err' : 'text-mut'}`}>{n.out}</pre>}
                 </>}
-              </div>
+              </div>}
             </div>
           ))}
         </div>
+        </div>
+      </div>
+      <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_110px_var(--bg)]" />
+      <div className="absolute left-4 bottom-4 flex items-center gap-0.5 p-1 rounded-xl bg-surface/85 backdrop-blur border border-line shadow-float">
+        <button title={t('orchZoomOut')} onClick={() => zoomTo(z - 0.1)} className={tb}><ZoomOut size={15} /></button>
+        <button title="100%" onClick={() => zoomTo(1)} className="w-10 text-micro tabular-nums text-dim hover:text-fg">{Math.round(z * 100)}%</button>
+        <button title={t('orchZoomIn')} onClick={() => zoomTo(z + 0.1)} className={tb}><ZoomIn size={15} /></button>
+        <span className="w-px h-4 mx-0.5 bg-line" />
+        <button title={t('orchFit')} onClick={fit} className={tb}><Scan size={15} /></button>
+        <button title={t('orchLayout')} onClick={layout} className={tb}><Workflow size={15} /></button>
+        <button title={t('orchSnap')} onClick={() => setSnap(!snap)} className={`${tb} ${snap ? 'text-accent bg-accent-dim' : ''}`}><Magnet size={15} /></button>
+      </div>
+      <MiniMap c={canvas} z={z} nodes={o.nodes} />
       </div>
     </div>
-    <Dialogue log={log} busy={running} onStop={() => { stopped.current = true; stopAgents().catch(console.error) }} queue={!!o.queue} onQueue={() => upd((c) => ({ ...c, queue: !c.queue }))} leadChat={!!o.leadChat} onLeadChat={() => upd((c) => ({ ...c, leadChat: !c.leadChat }))} onSend={ask} onClear={() => upd((c) => ({ ...c, log: [], nodes: c.nodes.map((n) => ({ ...n, sid: undefined, mapSum: undefined, sum: undefined })) }))}
+    <Dialogue log={log} busy={running} onStop={() => { stopped.current = true; stopAgents().catch(console.error) }} queue={!!o.queue} onQueue={() => upd((c) => ({ ...c, queue: !c.queue }))} leadChat={!!o.leadChat} onLeadChat={() => upd((c) => ({ ...c, leadChat: !c.leadChat }))} onAttach={attach} onSend={ask} onClear={() => upd((c) => ({ ...c, log: [], nodes: c.nodes.map((n) => ({ ...n, sid: undefined, mapSum: undefined, sum: undefined })) }))}
       agents={o.nodes.filter((n) => n.kind !== 'rules').map((n) => ({ id: n.id, name: who(n), role: n.role ?? (n.kind === 'model' ? n.text.split(/\r?\n/)[0].slice(0, 60) : undefined), state: n.state, task: [...log].reverse().find((e) => e.kind === 'task' && e.toId === n.id)?.text }))} />
+    </div>
+  )
+}
+
+/** The whole canvas at a glance: blocks as coloured tiles and the visible part as a frame; click or drag to jump. */
+function MiniMap({ c, z, nodes }: { c: React.RefObject<HTMLDivElement>; z: number; nodes: Node[] }) {
+  const [v, setV] = useState({ l: 0, t: 0, w: 0, h: 0 })
+  useLayoutEffect(() => {
+    const el = c.current!, f = () => setV({ l: el.scrollLeft, t: el.scrollTop, w: el.clientWidth, h: el.clientHeight })
+    f(); el.addEventListener('scroll', f); window.addEventListener('resize', f)
+    return () => { el.removeEventListener('scroll', f); window.removeEventListener('resize', f) }
+  }, [c, z])
+  const go = (e: React.PointerEvent) => { const r = e.currentTarget.getBoundingClientRect(); c.current!.scrollLeft = (e.clientX - r.left) / MM * z - v.w / 2; c.current!.scrollTop = (e.clientY - r.top) / MM * z - v.h / 2 }
+  return (
+    <div onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); go(e) }} onPointerMove={(e) => e.buttons && go(e)}
+      className="absolute right-4 bottom-4 rounded-xl bg-surface/85 backdrop-blur border border-line shadow-float overflow-hidden cursor-pointer" style={{ width: CW * MM, height: CH * MM }}>
+      {nodes.map((n) => <span key={n.id} className="absolute rounded-sm opacity-80" style={{ left: n.x * MM, top: n.y * MM, width: W * MM, height: (n.compact ? 70 : 200) * MM, background: hue(n) }} />)}
+      <span className="absolute rounded-sm border border-accent bg-accent-dim pointer-events-none" style={{ left: v.l / z * MM, top: v.t / z * MM, width: v.w / z * MM, height: v.h / z * MM }} />
     </div>
   )
 }
@@ -422,8 +610,8 @@ const DOT = { run: 'bg-accent animate-pulse', ok: 'bg-status-ok', err: 'bg-statu
 const hm = (at: number) => new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
 /** Replaces the chat sidebar on this tab: who is doing what, the saved dialogue between agents, and a box to write to any of them. */
-function Dialogue({ log, agents, busy, onStop, queue, onQueue, leadChat, onLeadChat, onSend, onClear }: {
-  log: Entry[]; busy: boolean; onStop: () => void; queue: boolean; onQueue: () => void; leadChat: boolean; onLeadChat: () => void; onSend: (id: string, text: string) => void; onClear: () => void
+function Dialogue({ log, agents, busy, onStop, queue, onQueue, leadChat, onLeadChat, onAttach, onSend, onClear }: {
+  log: Entry[]; busy: boolean; onStop: () => void; queue: boolean; onQueue: () => void; leadChat: boolean; onLeadChat: () => void; onAttach: (id: string, files: File[]) => void; onSend: (id: string, text: string) => void; onClear: () => void
   agents: { id: string; name: string; role?: string; state?: Node['state']; task?: string }[]
 }) {
   const { t } = useI18n()
@@ -432,7 +620,7 @@ function Dialogue({ log, agents, busy, onStop, queue, onQueue, leadChat, onLeadC
   const [text, setText] = useState('')
   useEffect(() => { end.current?.scrollIntoView({ block: 'end' }) }, [log.length, agents.filter((a) => a.state === 'run').length])
   const target = agents.some((a) => a.id === to) ? to : agents[0]?.id
-  const send = () => { const m = text.trim(); if (m && !busy && target) { onSend(target, m); setText('') } }
+  const send = () => { const m = text.trim(); if (m === '/clear' && !busy) { onClear(); setText(''); return } if (m && !busy && target) { onSend(target, m); setText('') } }
   const done = agents.filter((a) => a.state === 'ok').length
   return (
     <aside className="anim-slide w-[26rem] shrink-0 border-l border-line bg-surface flex flex-col text-sm">
@@ -476,15 +664,17 @@ function Dialogue({ log, agents, busy, onStop, queue, onQueue, leadChat, onLeadC
         <div ref={end} />
       </div>
       <div className="px-4 pt-3 pb-3 flex flex-col gap-2">
-        <div className="flex gap-2">
-          <button title={t(queue ? 'orchQueueTip' : 'orchParTip')} onClick={onQueue} className="btn-press px-3 py-1 rounded-full border border-line text-xs text-dim hover:text-fg">{t(queue ? 'orchQueue' : 'orchPar')}</button>
-          {target === agents[0]?.id && <button title={t(leadChat ? 'orchChatTip' : 'orchRebriefTip')} onClick={onLeadChat} className="btn-press px-3 py-1 rounded-full border border-line text-xs text-dim hover:text-fg">{t(leadChat ? 'orchChatOnly' : 'orchRebrief')}</button>}
+        <div className="flex items-center gap-1.5">
+          <select value={target} onChange={(e) => setTo(e.target.value)} title={t('orchTo')}
+            className="min-w-0 flex-1 px-3 py-1 rounded-full bg-field border border-line focus:border-accent outline-none text-xs">
+            {agents.map((a) => <option key={a.id} value={a.id}>{t('orchTo')}: {a.name}</option>)}
+          </select>
+          <button title={t(queue ? 'orchQueueTip' : 'orchParTip')} onClick={onQueue} className="btn-press px-2.5 py-1 rounded-full border border-line text-xs text-dim hover:text-fg">{t(queue ? 'orchQueue' : 'orchPar')}</button>
+          {target === agents[0]?.id && <button title={t(leadChat ? 'orchChatTip' : 'orchRebriefTip')} onClick={onLeadChat} className="btn-press px-2.5 py-1 rounded-full border border-line text-xs text-dim hover:text-fg">{t(leadChat ? 'orchChatOnly' : 'orchRebrief')}</button>}
         </div>
-        <select value={target} onChange={(e) => setTo(e.target.value)} title={t('orchTo')}
-          className="px-3 py-1.5 rounded-lg bg-field border border-line focus:border-accent outline-none text-xs">
-          {agents.map((a) => <option key={a.id} value={a.id}>{t('orchTo')}: {a.name}</option>)}
-        </select>
         <div className="flex items-end gap-2 pl-4 pr-2 py-2 rounded-2xl bg-field border border-line focus-within:border-accent focus-within:shadow-float">
+          <label title={t('orchAttachTip')} className="btn-press p-1.5 rounded-lg text-dim hover:text-accent cursor-pointer self-center"><Paperclip size={15} />
+            <input type="file" accept="image/*" multiple hidden onChange={(e) => { if (target) onAttach(target, [...(e.target.files ?? [])]); e.target.value = '' }} /></label>
           <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} spellCheck={false} placeholder={t('orchMsgPh')}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
             className="flex-1 min-w-0 py-1 bg-transparent outline-none resize-none text-sm placeholder:text-dim max-h-40" />

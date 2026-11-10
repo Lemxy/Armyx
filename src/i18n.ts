@@ -9,12 +9,12 @@ const en = {
   newNoteHere: '+ New note here', resetView: 'Reset view and zoom', deleteConfirm: 'Delete note "{n}"?', 
   graphSearch: 'Search notes by title, content or tag…', connections: 'connections',
   tokens: 'tokens', settings: 'Settings', agentsTitle: 'Agents (Ctrl J)', close: 'Close',
-  language: 'Language', smooth: 'Smooth animations', smoothDesc: 'Transitions, fades and graph glide. Turn off for reduced motion.',
+  language: 'Language', hideOut: 'Hide agent output in blocks', hideOutDesc: 'Blocks show no answer text; errors and the final result stay. The full dialogue is on the right.', smooth: 'Smooth animations', smoothDesc: 'Transitions, fades and graph glide. Turn off for reduced motion.',
   projTitle: 'Projects', projects: 'Projects', create: 'Create',
   
   agents: 'Agents', 
   
-  model: 'Model', reasoning: 'Reasoning Effort', low: 'Low', medium: 'Medium', high: 'High', 
+  model: 'Model', reasoning: 'Reasoning Effort', autoRoute: 'Cheap model for simple lookups', autoRouteTip: 'When the map points at one file with confidence and the question is short, the cheapest model answers at low effort. Off: always your model.', low: 'Low', medium: 'Medium', high: 'High', 
   promptPh: 'Message the agent…', insert: 'Insert reply into note', 
   online: 'Online', ready: 'Ready', simBrowser: 'CLI needs the desktop app', simKey: 'API key required', tokIn: 'tok in', tokOut: 'tok out',
   
@@ -28,12 +28,12 @@ const en = {
  orchThinking: 'thinking', orchClear: 'Clear history', orchIso: 'Isolate', orchFinal: 'final answer', orchCap: 'Run stopped: it reached ${n} (blocks not started stay idle).',
   orchTokCap: 'Run stopped: it used {n} tokens (blocks not started stay idle).', orchWriterFail: 'The agent may have changed files before it failed: check Changes before running it again.',
   orchSaveFail: 'The orchestra could not be saved (browser storage is full): changes since the last save will be lost on restart.',
-  insertImage: 'Save picture & insert',
-  orchTpl: 'Template…', orchTplBuiltin: 'Ready-made', orchTplSaved: 'Yours', orchTplSave: 'Save this orchestra as a template (same name replaces it)', orchEstTip: 'Estimate of what the next run sends in: task, block contexts, notes and the map. The answers come on top.',
+  insertImage: 'Save picture & insert', attachImage: 'Attach an image', orchAttachTip: 'Attach an image to the agent chosen above: it stays on that block.', noImagesDs: 'DeepSeek takes no images: pick another model.',
+  orchTpl: 'Template…', orchTplBuiltin: 'Ready-made', orchTplSaved: 'Yours', orchTplSave: 'Save this orchestra as a template (same name replaces it)', orchTplDel: 'Delete a template…', orchEstTip: 'Estimate of what the next run sends in: task, block contexts, notes and the map. The answers come on top.',
   orchRerun: 'Run this block again, and what follows it', orchEdgeTip: 'Click: pass always / only if OK / only if not OK. Right-click: remove the link.', orchEdgeOk: 'if OK', orchEdgeBad: 'if not OK', orchRuns: 'Last runs', orchRunsEmpty: 'No runs yet.',
-  orchRole: 'Pick a role for this block', orchNoRole: 'No role', orchReview: 'Review', orchOff: 'off', orchReviewWarn: 'The reviewer still found problems after {n} fix round(s): the last answer is kept.',
-  orchRebrief: 'Re-brief everyone', orchChatOnly: 'Just answer', orchRebriefTip: 'A message to the lead briefs every agent again. Click: the lead only answers.', orchChatTip: 'A message to the lead is only answered, nobody is briefed. Click: re-brief everyone.', orchIsoTip: 'Agents work in a separate git worktree; your project changes only when you press Apply', orchIsoFail: 'Cannot isolate the run (turn Isolate off to work in the project itself).', orchDiff: 'Changes', orchApply: 'Apply', orchDiscard: 'Discard', orchDiscardAsk: 'Throw away everything the agents changed?', orchApplied: 'Applied to the project (not committed).', orchDiscarded: 'Discarded.', orchNoChanges: 'No changes.', orchTo: 'To', orchMsgPh: 'Write to the lead or to one agent…',
- orchMapCtx: 'Context: project map · {n} notes · ~{k} tok',  orchestra: 'Orchestra', blockRules: 'Rules', orchNew: 'New orchestra', orchName: 'Orchestra name', orchEffort: 'Effort', dsKey: 'DeepSeek API key (stored locally)', orchNamePh: 'Block name…', dsNoKey: 'Add the DeepSeek API key in Settings first.', gemKey: 'Gemini API key (Antigravity chat, Nano Banana)', gemNoKey: 'Add the Gemini API key in Settings first.', orchRun: 'Run', openFolder: 'Open project folder', orchPar: 'Parallel', orchQueue: 'Queue', orchParTip: 'Parallel: blocks start as soon as their inputs are ready. Click for queue.', orchQueueTip: 'Queue: one block at a time. Click for parallel.', orchRunning: 'Running…', orchEmpty: 'Right-click to add a model or a rules block', orchCycle: 'These blocks form a loop — remove a link.', orchUnlink: 'Click to remove link', orchIn: 'Input', orchOut: 'Drag onto a block to link it', blockStart: 'Start', orchStartPh: 'Starting input for the chain…', orchRulesPh: 'Rules for connected models…', orchCtxPh: 'Context for this model…', orchEmbed: '+ Embed a note',
+  orchRole: 'Pick a role for this block', orchNoRole: 'No role', orchReview: 'Review', orchOff: 'off', orchReviewWarn: 'The reviewer still found problems after {n} fix round(s): the last answer is kept.', orchToolText: 'The agent answered with a tool call written out as text instead of an answer (it wanted a tool it does not have). Run it again; if it repeats, give the block the tools it needs.',
+  orchRebrief: 'Re-brief', orchChatOnly: 'Just answer', orchRebriefTip: 'A message to the lead briefs again only the agents it concerns; the rest keep their answers. Click: the lead only answers.', orchChatTip: 'A message to the lead is only answered, nobody is briefed. Click: re-brief everyone.', orchIsoTip: 'Agents work in a separate git worktree; your project changes only when you press Apply', orchIsoFail: 'Cannot isolate the run (turn Isolate off to work in the project itself).', orchDiff: 'Changes', orchApply: 'Apply', orchDiscard: 'Discard', orchDiscardAsk: 'Throw away everything the agents changed?', orchApplied: 'Applied to the project (not committed).', orchDiscarded: 'Discarded.', orchNoChanges: 'No changes.', orchTo: 'To', orchMsgPh: 'Write to the lead or to one agent…',
+ orchMapCtx: 'Context: project map · {n} notes · ~{k} tok',  orchestra: 'Orchestra', blockRules: 'Rules', orchNew: 'New orchestra', orchName: 'Orchestra name', orchEffort: 'Effort', dsKey: 'DeepSeek API key (stored locally)', orchNamePh: 'Block name…', dsNoKey: 'Add the DeepSeek API key in Settings first.', gemKey: 'Gemini API key (Antigravity chat, Nano Banana)', gemNoKey: 'Add the Gemini API key in Settings first.', orchRun: 'Run', openFolder: 'Open project folder', orchPar: 'Parallel', orchQueue: 'Queue', orchParTip: 'Parallel: blocks start as soon as their inputs are ready. Click for queue.', orchQueueTip: 'Queue: one block at a time. Click for parallel.', orchRunning: 'Running…', orchEmpty: 'Right-click to add a model or a rules block', orchCycle: 'These blocks form a loop — remove a link.', orchUnlink: 'Click to remove link', orchIn: 'Input', orchOut: 'Drag onto a block to link it', blockStart: 'Start', orchStartPh: 'Starting input for the chain…', orchRulesPh: 'Rules for connected models…', orchCtxPh: 'Context for this model…', orchEmbed: '+ Embed a note', srcBoth: 'File + note', srcFile: 'File', srcNote: 'Note (.deso)', srcSaved: 'Saved', srcSaving: 'Saving…', orchFit: 'Fit to view', orchLayout: 'Auto-arrange', orchSnap: 'Snap to grid (hold Alt to move freely)', orchZoomIn: 'Zoom in', orchZoomOut: 'Zoom out', orchCompact: 'Collapse / expand',
   max: 'Max',
   usage: 'Plan limits', usage5h: '5-hour window', usage7d: 'Weekly window', resets: 'resets', desktopOnly: 'Available in the desktop app.',
   
@@ -58,12 +58,12 @@ const ru: Record<keyof typeof en, string> = {
   newNoteHere: '+ Новая заметка здесь', resetView: 'Сбросить вид и масштаб', deleteConfirm: 'Удалить заметку «{n}»?', 
   graphSearch: 'Поиск по названию, тексту или тегу…', connections: 'связей',
   tokens: 'токенов', settings: 'Настройки', agentsTitle: 'Агенты (Ctrl J)', close: 'Закрыть',
-  language: 'Язык', smooth: 'Плавные анимации', smoothDesc: 'Переходы, затухания и инерция графа. Отключите для уменьшения движения.',
+  language: 'Язык', hideOut: 'Скрывать вывод агентов в блоках', hideOutDesc: 'Блоки не показывают текст ответа; ошибки и итог остаются. Полный диалог — справа.', smooth: 'Плавные анимации', smoothDesc: 'Переходы, затухания и инерция графа. Отключите для уменьшения движения.',
   projTitle: 'Проекты', projects: 'Проекты', create: 'Создать',
   
   agents: 'Агенты', 
   
-  model: 'Модель', reasoning: 'Уровень рассуждений', low: 'Низкий', medium: 'Средний', high: 'Высокий', 
+  model: 'Модель', reasoning: 'Уровень рассуждений', autoRoute: 'Дешёвая модель для простых вопросов', autoRouteTip: 'Если карта уверенно указывает на один файл, а вопрос короткий, отвечает самая дешёвая модель с низким усилием. Выключено: всегда ваша модель.', low: 'Низкий', medium: 'Средний', high: 'Высокий', 
   promptPh: 'Сообщение агенту…', insert: 'Вставить ответ в заметку', 
   online: 'Онлайн', ready: 'Готов', simBrowser: 'CLI доступен только в приложении', simKey: 'Нужен API-ключ', tokIn: 'ток. вх.', tokOut: 'ток. исх.',
   
@@ -77,12 +77,12 @@ const ru: Record<keyof typeof en, string> = {
  orchThinking: 'думает', orchClear: 'Очистить историю', orchIso: 'Изоляция', orchFinal: 'итоговый ответ', orchCap: 'Запуск остановлен: достигнут лимит ${n} (не начатые блоки остались без дела).',
   orchTokCap: 'Запуск остановлен: израсходовано {n} токенов (не начатые блоки остались без дела).', orchWriterFail: 'Агент мог успеть изменить файлы до сбоя — проверь «Изменения» перед повтором.',
   orchSaveFail: 'Оркестр не удалось сохранить (хранилище браузера переполнено): изменения после последнего сохранения пропадут при перезапуске.',
-  insertImage: 'Сохранить картинку и вставить',
-  orchTpl: 'Шаблон…', orchTplBuiltin: 'Готовые', orchTplSaved: 'Ваши', orchTplSave: 'Сохранить оркестр как шаблон (то же имя заменяет прежний)', orchEstTip: 'Оценка того, что следующий запуск отправит на вход: задача, контексты блоков, заметки и карта. Ответы добавятся сверху.',
+  insertImage: 'Сохранить картинку и вставить', attachImage: 'Прикрепить изображение', orchAttachTip: 'Прикрепить изображение к выбранному выше агенту: оно остаётся на этом блоке.', noImagesDs: 'DeepSeek не принимает изображения: выберите другую модель.',
+  orchTpl: 'Шаблон…', orchTplBuiltin: 'Готовые', orchTplSaved: 'Ваши', orchTplSave: 'Сохранить оркестр как шаблон (то же имя заменяет прежний)', orchTplDel: 'Удалить шаблон…', orchEstTip: 'Оценка того, что следующий запуск отправит на вход: задача, контексты блоков, заметки и карта. Ответы добавятся сверху.',
   orchRerun: 'Запустить этот блок заново и всё после него', orchEdgeTip: 'Клик: передавать всегда / только если OK / только если не OK. Правый клик: удалить связь.', orchEdgeOk: 'если OK', orchEdgeBad: 'если не OK', orchRuns: 'Последние запуски', orchRunsEmpty: 'Запусков ещё не было.',
-  orchRole: 'Выбрать роль для блока', orchNoRole: 'Без роли', orchReview: 'Ревью', orchOff: 'выкл', orchReviewWarn: 'Ревьюер всё ещё находит проблемы после раундов исправления: {n}. Оставлен последний ответ.',
-  orchRebrief: 'Перебрифовать всех', orchChatOnly: 'Только ответить', orchRebriefTip: 'Сообщение ведущему заново брифует всех агентов. Клик — ведущий только отвечает.', orchChatTip: 'Сообщение ведущему только получает ответ, никого не брифуют. Клик — перебрифовать всех.', orchIsoTip: 'Агенты работают в отдельном git worktree; проект меняется только после «Применить»', orchIsoFail: 'Не удалось изолировать запуск (выключите «Изоляцию», чтобы работать прямо в проекте).', orchDiff: 'Изменения', orchApply: 'Применить', orchDiscard: 'Отбросить', orchDiscardAsk: 'Отбросить всё, что изменили агенты?', orchApplied: 'Применено к проекту (без коммита).', orchDiscarded: 'Отброшено.', orchNoChanges: 'Изменений нет.', orchTo: 'Кому', orchMsgPh: 'Напишите ведущему или отдельному агенту…',
- orchMapCtx: 'Контекст: карта проекта · {n} заметок · ~{k} ток.',  orchestra: 'Оркестр', blockRules: 'Правила', orchNew: 'Новый оркестр', orchName: 'Название оркестра', orchEffort: 'Усилие', dsKey: 'API-ключ DeepSeek (хранится локально)', orchNamePh: 'Название блока…', dsNoKey: 'Сначала добавьте API-ключ DeepSeek в настройках.', gemKey: 'API-ключ Gemini (чат Antigravity, Nano Banana)', gemNoKey: 'Сначала добавьте API-ключ Gemini в настройках.', orchRun: 'Запустить', openFolder: 'Открыть папку проекта', orchPar: 'Параллельно', orchQueue: 'По очереди', orchParTip: 'Параллельно: блок стартует, как только готовы его входы. Клик — по очереди.', orchQueueTip: 'По очереди: по одному блоку. Клик — параллельно.', orchRunning: 'Выполняется…', orchEmpty: 'Правая кнопка мыши — добавить модель или блок правил', orchCycle: 'Блоки образуют цикл — удалите связь.', orchUnlink: 'Клик — удалить связь', orchIn: 'Вход', orchOut: 'Потяните на блок, чтобы связать', blockStart: 'Старт', orchStartPh: 'Исходные данные для цепочки…', orchRulesPh: 'Правила для подключённых моделей…', orchCtxPh: 'Контекст для этой модели…', orchEmbed: '+ Вшить заметку',
+  orchRole: 'Выбрать роль для блока', orchNoRole: 'Без роли', orchReview: 'Ревью', orchOff: 'выкл', orchReviewWarn: 'Ревьюер всё ещё находит проблемы после раундов исправления: {n}. Оставлен последний ответ.', orchToolText: 'Агент вместо ответа написал текстом вызов инструмента (хотел инструмент, которого у него нет). Запустите снова; если повторится — дайте блоку нужные инструменты.',
+  orchRebrief: 'Перебрифовать', orchChatOnly: 'Только ответить', orchRebriefTip: 'Сообщение ведущему заново брифует только тех агентов, кого оно касается; остальные сохраняют ответы. Клик — ведущий только отвечает.', orchChatTip: 'Сообщение ведущему только получает ответ, никого не брифуют. Клик — перебрифовать всех.', orchIsoTip: 'Агенты работают в отдельном git worktree; проект меняется только после «Применить»', orchIsoFail: 'Не удалось изолировать запуск (выключите «Изоляцию», чтобы работать прямо в проекте).', orchDiff: 'Изменения', orchApply: 'Применить', orchDiscard: 'Отбросить', orchDiscardAsk: 'Отбросить всё, что изменили агенты?', orchApplied: 'Применено к проекту (без коммита).', orchDiscarded: 'Отброшено.', orchNoChanges: 'Изменений нет.', orchTo: 'Кому', orchMsgPh: 'Напишите ведущему или отдельному агенту…',
+ orchMapCtx: 'Контекст: карта проекта · {n} заметок · ~{k} ток.',  orchestra: 'Оркестр', blockRules: 'Правила', orchNew: 'Новый оркестр', orchName: 'Название оркестра', orchEffort: 'Усилие', dsKey: 'API-ключ DeepSeek (хранится локально)', orchNamePh: 'Название блока…', dsNoKey: 'Сначала добавьте API-ключ DeepSeek в настройках.', gemKey: 'API-ключ Gemini (чат Antigravity, Nano Banana)', gemNoKey: 'Сначала добавьте API-ключ Gemini в настройках.', orchRun: 'Запустить', openFolder: 'Открыть папку проекта', orchPar: 'Параллельно', orchQueue: 'По очереди', orchParTip: 'Параллельно: блок стартует, как только готовы его входы. Клик — по очереди.', orchQueueTip: 'По очереди: по одному блоку. Клик — параллельно.', orchRunning: 'Выполняется…', orchEmpty: 'Правая кнопка мыши — добавить модель или блок правил', orchCycle: 'Блоки образуют цикл — удалите связь.', orchUnlink: 'Клик — удалить связь', orchIn: 'Вход', orchOut: 'Потяните на блок, чтобы связать', blockStart: 'Старт', orchStartPh: 'Исходные данные для цепочки…', orchRulesPh: 'Правила для подключённых моделей…', orchCtxPh: 'Контекст для этой модели…', orchEmbed: '+ Вшить заметку', srcBoth: 'Файл + заметка', srcFile: 'Файл', srcNote: 'Заметка (.deso)', srcSaved: 'Сохранено', srcSaving: 'Сохранение…', orchFit: 'Вписать всё', orchLayout: 'Авто-раскладка', orchSnap: 'Привязка к сетке (Alt — двигать свободно)', orchZoomIn: 'Приблизить', orchZoomOut: 'Отдалить', orchCompact: 'Свернуть / развернуть',
   max: 'Макс',
   usage: 'Лимиты плана', usage5h: 'Окно 5 часов', usage7d: 'Окно недели', resets: 'сброс', desktopOnly: 'Доступно в десктопном приложении.',
   
@@ -104,14 +104,14 @@ export type Key = keyof typeof en
 const dict = { en, ru }
 
 const read = <T extends string>(k: string, ok: T[], d: T) => { const v = localStorage.getItem(k) as T; return ok.includes(v) ? v : d }
-let state = { lang: read<Lang>('deso_lang', ['en', 'ru'], 'en'), smooth: localStorage.getItem('deso_smooth') !== '0' }
+let state = { lang: read<Lang>('deso_lang', ['en', 'ru'], 'en'), smooth: localStorage.getItem('deso_smooth') !== '0', hideOut: localStorage.getItem('deso_hideOut') === '1' }
 const subs = new Set<() => void>()
 const apply = () => { document.documentElement.dataset.motion = state.smooth ? 'on' : 'off'; document.documentElement.lang = state.lang }
 apply()
 
 const set = (p: Partial<typeof state>) => {
   state = { ...state, ...p }
-  localStorage.setItem('deso_lang', state.lang); localStorage.setItem('deso_smooth', state.smooth ? '1' : '0')
+  localStorage.setItem('deso_lang', state.lang); localStorage.setItem('deso_smooth', state.smooth ? '1' : '0'); localStorage.setItem('deso_hideOut', state.hideOut ? '1' : '0')
   apply(); subs.forEach((f) => f())
 }
 export const isSmooth = () => state.smooth
@@ -120,5 +120,5 @@ export function useI18n() {
   const s = useSyncExternalStore((f) => { subs.add(f); return () => { subs.delete(f) } }, () => state)
   const t = (k: Key, v?: Record<string, string | number>) =>
     dict[s.lang][k].replace(/\{(\w+)\}/g, (_, x) => String(v?.[x] ?? ''))
-  return { t, lang: s.lang, smooth: s.smooth, setLang: (lang: Lang) => set({ lang }), setSmooth: (smooth: boolean) => set({ smooth }) }
+  return { t, lang: s.lang, smooth: s.smooth, hideOut: s.hideOut, setHideOut: (hideOut: boolean) => set({ hideOut }), setLang: (lang: Lang) => set({ lang }), setSmooth: (smooth: boolean) => set({ smooth }) }
 }

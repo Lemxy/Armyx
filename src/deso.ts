@@ -57,12 +57,13 @@ export const savings = (src: string) => {
   return { d, m, pct: m ? Math.round((1 - d / m) * 100) : 0 }
 }
 
-const prop = (src: string, k: string) => src.match(new RegExp(String.raw`^\?${k}:\s*(.+)$`, 'm'))?.[1].trim()
+export const prop = (src: string, k: string) => src.match(new RegExp(String.raw`^\?${k}:\s*(.+)$`, 'm'))?.[1].trim()
 
 /** How the agent should read `graphMap` (kept next to it so the two never drift apart). */
 export const MAP_INTRO =
   'Project map, one line per file: `id path — about [exports] -> linked ids` (less important files: `id path — about`). ' +
   '`~` before a file in uses / used by = link guessed by symbol name, not an import. "Best matches" may follow with the closest files. ' +
+  '`{name@12-40}` = the lines of that definition at the last scan: read just that range (offset/limit) instead of the whole file; if it moved, search for the name. ' +
   'If the map does not name the answer, search (Grep/Glob) or open the file; never guess a path.'
 
 const MAP_BUDGET = 8000 // tokens, resent on every turn: half for full lines, half for shortened ones
@@ -122,6 +123,14 @@ const focusScore = (notes: Note[], focus: string) => {
   return score
 }
 
+/** `name@first-last` for the definitions the scanner located in a file, those named in `focus` first. */
+const spansOf = (n: Note, focus: string, k = 4) => {
+  const q = new Set(terms(focus)), all = prop(n.content, 'spans')?.split(', ') ?? []
+  const hit = (s: string) => terms(s.split(':')[0]).some((t) => q.has(t))
+  return [...all.filter(hit), ...all.filter((s) => !hit(s))].slice(0, k).map((s) => s.replace(':', '@')).join(', ')
+}
+const braced = (s: string) => (s ? ` {${s}}` : '')
+
 /**
  * The notes that best match `focus`, one plain line each (real paths, no ids). Send it after a static `graphMap(notes)`:
  * the map stays identical between questions, so the API serves it from the prompt cache at a fraction of the price.
@@ -133,7 +142,7 @@ export const topHits = (notes: Note[], focus: string, k = 12, spread = DIVERSE) 
     const certain = (l: string[]) => [...l].sort((a, b) => Number(a.startsWith('~')) - Number(b.startsWith('~')))
     const calls = i < 3 ? certain(prop(n.content, 'calls')?.split(/, (?=[^,]*\()/) ?? []).slice(0, 3).join(', ') : undefined
     const callers = i < 3 ? certain(prop(n.content, 'callers')?.split(', ') ?? []).slice(0, i ? 4 : 8).join(', ') : undefined
-    return [prop(n.content, 'path') ?? title(n), prop(n.content, 'about')?.slice(0, 70)].filter(Boolean).join(' — ') + (calls ? ` | uses ${calls}` : '') + (callers ? ` | used by ${callers}` : '')
+    return [prop(n.content, 'path') ?? title(n), prop(n.content, 'about')?.slice(0, 70)].filter(Boolean).join(' — ') + (i < 3 ? braced(spansOf(n, focus)) : '') + (calls ? ` | uses ${calls}` : '') + (callers ? ` | used by ${callers}` : '')
   }).join('\n')
 
 /**
@@ -162,11 +171,29 @@ export const scoredHits = (notes: Note[], focus: string) => {
 }
 
 /**
+ * A number for every note that never moves: a known note keeps the one in `prev`, a new note takes the next free one. The map lists
+ * notes in this order, so a new file is one more line at the end and every line above it stays the same text; numbering by position
+ * instead shifted every later number, and a prompt cache only reuses the unchanged start of a prompt.
+ * shortcut: the numbers of deleted notes are never reused, so `prev` only grows; start it afresh if a project ever churns that much.
+ */
+export const mapIds = (notes: Note[], prev: Iterable<[string, number]> = []) => {
+  const ids = new Map(prev)
+  let next = Math.max(0, ...ids.values())
+  for (const name of notes.map((n) => n.name).sort((a, b) => a.localeCompare(b))) if (!ids.has(name)) ids.set(name, ++next)
+  return ids
+}
+
+/** ids: the saved numbers (see `mapIds`). heat: how many times agents opened each file (by path). */
+export type MapOpts = { ids?: Map<string, number>; heat?: Map<string, number> }
+// A file agents keep opening earns a full line. Whole steps only (1, 3, 7, 15 opens), so the map changes rarely and stays cacheable.
+const warmth = (opens = 0) => 2 * Math.floor(Math.log2(1 + opens))
+
+/**
  * Compact map of the vault for an agent. Short numeric ids instead of long note names (links were most of the size),
  * and a token budget: the best-ranked notes get a full line, the next ones a short `id path — about` line, the rest a count.
- * Rank = how well a note matches `focus` (rare words weigh more) + links + size, so leaf files are not buried by hubs.
+ * Rank = how well a note matches `focus` (rare words weigh more) + links + size + use, so leaf files are not buried by hubs.
  */
-export const graphMap = (notes: Note[], budget = MAP_BUDGET, focus = '') => {
+export const graphMap = (notes: Note[], budget = MAP_BUDGET, focus = '', { ids, heat }: MapOpts = {}) => {
   const have = new Set(notes.map((n) => n.name))
   const out = new Map(notes.map((n) => [n.name, links(n.content).filter((l) => have.has(l) && l !== n.name)]))
   const degree = new Map(notes.map((n) => [n.name, out.get(n.name)!.length]))
@@ -174,7 +201,7 @@ export const graphMap = (notes: Note[], budget = MAP_BUDGET, focus = '') => {
 
   const score = focusScore(notes, focus)
   const size = new Map(notes.map((n) => [n.name, Math.log2(1 + Number(prop(n.content, 'lines') ?? 0) / 50)]))
-  const rank = (n: Note) => (score.get(n.name) ?? 0) * 10 + degree.get(n.name)! + size.get(n.name)!
+  const rank = (n: Note) => (score.get(n.name) ?? 0) * 10 + degree.get(n.name)! + size.get(n.name)! + warmth(heat?.get(prop(n.content, 'path') ?? ''))
   const ranked = [...notes].sort((a, b) => rank(b) - rank(a) || a.name.localeCompare(b.name))
 
   const path = (n: Note) => prop(n.content, 'path') ?? title(n)
@@ -191,15 +218,17 @@ export const graphMap = (notes: Note[], budget = MAP_BUDGET, focus = '') => {
     }
     picked.push(n)
   }
-  picked.sort((a, b) => a.name.localeCompare(b.name))
-  const id = new Map(picked.map((n, i) => [n.name, i + 1]))
+  const id = mapIds(notes, ids), shown = new Set(picked.map((n) => n.name))
+  picked.sort((a, b) => id.get(a.name)! - id.get(b.name)!)
+  // the three files closest to the question also say where their definitions are, so the agent reads those lines, not the file
+  const close = new Set([...score].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([name]) => name))
 
   const lines = picked.map((n) => {
     if (!full.has(n.name)) return `${id.get(n.name)} ${[path(n), about(n, 50)].filter(Boolean).join(' — ')}`
-    const to = out.get(n.name)!.filter((l) => id.has(l)).map((l) => id.get(l)).slice(0, MAP_LINKS)
+    const to = out.get(n.name)!.filter((l) => shown.has(l)).map((l) => id.get(l)).slice(0, MAP_LINKS)
     const exp = prop(n.content, 'exports')?.split(', ').slice(0, 5).join(', ')
     const what = [path(n), about(n, 70), exp && `[${exp}]`].filter(Boolean).join(' — ')
-    return `${id.get(n.name)} ${what}${to.length ? ` -> ${to.join(',')}` : ''}`
+    return `${id.get(n.name)} ${what}${close.has(n.name) ? braced(spansOf(n, focus)) : ''}${to.length ? ` -> ${to.join(',')}` : ''}`
   })
   if (picked.length < notes.length) lines.push(`(${notes.length - picked.length} less connected notes omitted: search the project for them)`)
   return lines.join('\n')
@@ -211,9 +240,23 @@ export const graphMap = (notes: Note[], budget = MAP_BUDGET, focus = '') => {
  * Measured on Django: at 1.5 the best hit was right 17 of 17 times for questions quoting the code, but only 1 of 4 for rewritten ones.
  */
 export const SURE = 1.5
-export const sureHits = (notes: Note[], focus: string, k = 5) => {
-  const h = scoredHits(notes, focus)
-  return h.length && (h.length < 2 || h[0].score / h[1].score >= SURE) ? topHits(notes, focus, k) : ''
+export const sure = (notes: Note[], focus: string) => { const h = scoredHits(notes, focus); return h.length > 0 && (h.length < 2 || h[0].score / h[1].score >= SURE) }
+export const sureHits = (notes: Note[], focus: string, k = 5) => (sure(notes, focus) ? topHits(notes, focus, k) : '')
+
+const mentions = (text: string, p: string) => { for (let i = text.indexOf(p); i >= 0; i = text.indexOf(p, i + 1)) if (!/[\w./\\-]/.test(text[i - 1] ?? ' ')) return true; return false }
+/**
+ * For an agent that never sees the map: the files its brief names (with the lines of their definitions), then the files those link
+ * to and the files agents opened together with them (`co`, keyed `a|b`, at least twice). Empty when the brief names no known file.
+ */
+export const subMap = (notes: Note[], text: string, co?: Map<string, number>, max = 12) => {
+  const path = (n: Note) => prop(n.content, 'path') ?? ''
+  const named = notes.filter((n) => path(n) && mentions(text, path(n)))
+  if (!named.length) return ''
+  const by = new Map(notes.map((n) => [n.name, n])), paths = new Set(named.map(path))
+  const together = new Set([...(co ?? [])].filter(([, c]) => c >= 2).flatMap(([k]) => { const [a, b] = k.split('|'); return paths.has(a) ? [b] : paths.has(b) ? [a] : [] }))
+  const near = [...named.flatMap((n) => links(n.content).flatMap((l) => by.get(l) ?? [])), ...notes.filter((n) => together.has(path(n)))].filter(path)
+  return [...new Set([...named, ...near])].slice(0, max)
+    .map((n) => [path(n), prop(n.content, 'about')?.slice(0, 50)].filter(Boolean).join(' — ') + (paths.has(path(n)) ? braced(spansOf(n, text)) : '')).join('\n')
 }
 
 /** Folder outline (two levels, largest first): a map for projects too big for one, a few hundred tokens instead of 8,000. */
@@ -231,7 +274,7 @@ export const outline = (notes: Note[], max = 30) => {
 export const SMALL_PROJECT = 300
 
 /** Version of the note format the scanner writes (`?schema` in project-map); older graphs lack the `~` marks. Keep equal to SCHEMA in scan.rs. */
-export const SCHEMA = 2
+export const SCHEMA = 3
 export const staleSchema = (notes: Note[]) => { const m = notes.find((n) => n.name === 'project-map'); return !!m && Number(prop(m.content, 'schema') ?? 0) < SCHEMA }
 export const mapFor = (notes: Note[]) => notes.length <= SMALL_PROJECT ? graphMap(notes, 2500) : `Folders (the project has ${notes.length} files, too many to list; the best matches below are the ranking for this question):
 ${outline(notes)}`
