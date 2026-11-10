@@ -243,6 +243,36 @@ export const SURE = 1.5
 export const sure = (notes: Note[], focus: string) => { const h = scoredHits(notes, focus); return h.length > 0 && (h.length < 2 || h[0].score / h[1].score >= SURE) }
 export const sureHits = (notes: Note[], focus: string, k = 5) => (sure(notes, focus) ? topHits(notes, focus, k) : '')
 
+/**
+ * The source of the definitions a question names, when one file is a sure match: with it in the prompt the agent answers without
+ * opening the file. Measured on 6 such questions (archive/map-bench/reserve.mjs): 27k -> 12k input tokens, 2.2 -> 1.2 turns.
+ * Empty when the match is unsure, the question names no definition of that file, or the file moved on since the scan.
+ */
+export const sliceFor = async (notes: Note[], focus: string, read: (path: string) => Promise<string>, max = 120) => {
+  if (!sure(notes, focus)) return ''
+  const n = scoredHits(notes, focus)[0].note, path = prop(n.content, 'path'), asked = new Set(terms(focus))
+  const spans = (prop(n.content, 'spans')?.split(', ') ?? []).filter((s) => terms(s.split(':')[0]).some((t) => asked.has(t))).slice(0, 2)
+  if (!path || !spans.length) return ''
+  const lines = (await read(path)).split('\n')
+  return spans.flatMap((s) => {
+    const [name, range] = s.split(':'), [a, b] = range.split('-').map(Number)
+    if (!lines[a - 1]?.includes(name)) return [] // edited since the scan: these are no longer its lines
+    return [`# ${path} lines ${a}-${Math.min(b, a + max)}\n${lines.slice(a - 1, Math.min(b, a + max)).join('\n')}`]
+  }).join('\n\n')
+}
+
+/**
+ * The newest messages that fit a chat's limits. On overflow half the window goes at once, not one message per turn: the request then
+ * starts with the same text for the next maxTurns / 2 messages, and a prompt cache only reuses an unchanged start.
+ */
+export const trimBatch = <T,>(msgs: T[], maxTurns: number, maxChars: number, len: (m: T) => number) => {
+  const size = (from: number) => msgs.slice(from).reduce((n, m) => n + len(m), 0), step = maxTurns / 2
+  let s = 0
+  while (msgs.length - s > maxTurns || (msgs.length - s > step && size(s) > maxChars)) s += step
+  while (msgs.length - s > 1 && size(s) > maxChars) s++ // a few huge messages: nothing stable to keep, drop one at a time
+  return msgs.slice(s)
+}
+
 const mentions = (text: string, p: string) => { for (let i = text.indexOf(p); i >= 0; i = text.indexOf(p, i + 1)) if (!/[\w./\\-]/.test(text[i - 1] ?? ' ')) return true; return false }
 /**
  * For an agent that never sees the map: the files its brief names (with the lines of their definitions), then the files those link

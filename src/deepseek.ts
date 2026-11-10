@@ -1,19 +1,22 @@
 // DeepSeek chat call that tries several OpenAI-compatible gateways and keeps the first one that answers 200.
 // The last working gateway is remembered and tried first next time.
 import { getKey } from './keys'
+import { sse } from './sse'
 
 const GATEWAYS = ['https://api.deepseek.com', 'https://api.reformboss.com/v1']
 const LAST = 'desovault.dsGateway'
 const TIMEOUT = 90_000 // ms per gateway call: a hung gateway falls through to the next one instead of freezing the run
 
-export async function dsChat(key: string, body: object): Promise<any> {
+/** onText: stream the answer and report the text so far as it grows (the result then holds the text only, no usage). */
+export async function dsChat(key: string, body: object, onText?: (soFar: string) => void): Promise<any> {
   const custom = getKey('dsGateway').replace(/\/+$/, '') // user's own gateway from Settings
   const all = [...new Set([...(custom ? [custom] : []), ...GATEWAYS])]
   const last = localStorage.getItem(LAST)
   const order = last && all.includes(last) ? [last, ...all.filter((g) => g !== last)] : all
   let err = ''
   const headers = { 'content-type': 'application/json', authorization: `Bearer ${key}` }
-  const post = async (g: string, b: object) => { const r = await fetch(`${g}/chat/completions`, { method: 'POST', headers, body: JSON.stringify(b), signal: AbortSignal.timeout(TIMEOUT) }); return { r, j: await r.json().catch(() => ({})) } }
+  const stream = async (r: Response) => { let s = ''; await sse(r, (e) => { const d = e.choices?.[0]?.delta?.content; if (d) onText!((s += d)) }); return { choices: [{ message: { content: s } }] } }
+  const post = async (g: string, b: object) => { const r = await fetch(`${g}/chat/completions`, { method: 'POST', headers, body: JSON.stringify(onText ? { ...b, stream: true } : b), signal: AbortSignal.timeout(TIMEOUT) }); return { r, j: r.ok && onText ? await stream(r) : await r.json().catch(() => ({})) } }
   for (const g of order) {
     try {
       let { r, j } = await post(g, body)

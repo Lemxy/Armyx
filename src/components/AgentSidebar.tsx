@@ -4,7 +4,8 @@ import { ArrowUp, Check, ChevronDown, Clock, Copy, CornerDownLeft, FolderOpen, P
 import Segmented from './Segmented'
 import Markdown from './Markdown'
 import { useI18n } from '../i18n'
-import { graphMap, MAP_INTRO, sure, tokens, topHits, type Note } from '../deso'
+import { graphMap, MAP_INTRO, sliceFor, sure, tokens, topHits, trimBatch, type Note } from '../deso'
+import { sse } from '../sse'
 import { mapOpts, recordRead } from '../mapmem'
 import { getKey, setKey } from '../keys'
 import { dsChat } from '../deepseek'
@@ -12,11 +13,11 @@ import { nanoAgy, nanoImage } from '../nano'
 import { getImg, imgId, putImg } from '../imgs'
 import StoredImg from './StoredImg'
 import { picPath, readPics } from '../pics'
-import { agyModels, agyUsage, claudeUsage, inTauri, openRoot, runAgent, saveImage } from '../vault'
+import { agyModels, agyUsage, claudeUsage, inTauri, openRoot, readSource, runAgent, saveImage } from '../vault'
 
 type Id = 'claude' | 'agy' | 'deepseek' | 'nano'
 type Mode = 'cli' | 'api'
-type Msg = { role: 'user' | 'assistant'; text: string; at: number; error?: boolean; tin?: number; tout?: number; img?: string; imgId?: string; pics?: string[]; via?: string } // img = a generated picture; only imgId is saved (src/imgs.ts). pics = ids of pictures you attached
+type Msg = { role: 'user' | 'assistant'; text: string; at: number; error?: boolean; tin?: number; tout?: number; img?: string; imgId?: string; pics?: string[]; via?: string; code?: string } // img = a generated picture; only imgId is saved (src/imgs.ts). pics = ids of pictures you attached. code = the source the question was about (sliceFor), sent with it
 type Chat = { id: string; title: string; msgs: Msg[]; at: number }
 
 const AGENTS = {
@@ -43,10 +44,15 @@ const MAX_TURNS = 24, MAX_CHARS = 30000
 const SYSTEM = (map: string) =>
   `You are the assistant inside Taurium, a knowledge-graph note app. ${MAP_INTRO} Be concise and answer in the user's language.\n\n# Graph map\n${map}`
 
+// Without the map: the agent has the code itself. Measured: half the input tokens and one turn less than the map (archive/map-bench/reserve.mjs).
+const SLICE_SYSTEM = 'You are the assistant inside Taurium, a knowledge-graph note app, working in a code project. Be concise and answer in the user\'s language. ' +
+  'The code under "Code that most likely answers this message" comes from the project; if it does not answer, search (Grep/Glob) or Read.'
+const CODE_HEAD = '# Code that most likely answers this message'
+/** A message as the model gets it: with the code that was found for it. Kept with the message, so the request's start never changes. */
+const full = (m: Msg) => (m.code ? `${m.text}\n\n${CODE_HEAD}\n${m.code}` : m.text)
+
 const trim = (msgs: Msg[]) => {
-  const ok = msgs.filter((m) => !m.error)
-  let out = ok.slice(-MAX_TURNS), size = out.reduce((n, m) => n + m.text.length, 0)
-  while (out.length > 1 && size > MAX_CHARS) size -= out.shift()!.text.length
+  const out = trimBatch(msgs.filter((m) => !m.error), MAX_TURNS, MAX_CHARS, (m) => full(m).length)
   while (out.length && out[0].role !== 'user') out.shift()
   return out
 }
@@ -54,40 +60,50 @@ const trim = (msgs: Msg[]) => {
 const mime = (d: string) => d.slice(5, d.indexOf(';'))
 const b64 = (d: string) => d.split(',')[1]
 
-async function callApi(id: Id, key: string, system: string, msgs: Msg[], model: string, effort: number, pics: Map<string, string>): Promise<string> {
+/** The answer is streamed: onText gets the text so far every time it grows. */
+async function callApi(id: Id, key: string, system: string, msgs: Msg[], model: string, effort: number, pics: Map<string, string>, onText: (soFar: string) => void): Promise<string> {
+  let out = ''
   const have = (m: Msg) => (m.pics ?? []).filter((i) => pics.has(i))
   const [level, budget] = EFFORTS[effort]
   if (id === 'claude') {
-    // Claude 5.x: adaptive thinking + effort; budget_tokens is rejected with a 400. The graph map is cached between turns.
+    // Claude 5.x: adaptive thinking + effort; budget_tokens is rejected with a 400. Two cache points: the graph map (system) and,
+    // through the top-level cache_control, the end of the conversation, so the next turn rereads all of it at the cached price.
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-      body: JSON.stringify({ model, max_tokens: 16000, thinking: { type: 'adaptive' }, output_config: { effort: level },
+      body: JSON.stringify({ model, max_tokens: 16000, stream: true, cache_control: { type: 'ephemeral' }, thinking: { type: 'adaptive' }, output_config: { effort: level },
         system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
-        messages: msgs.map((m) => ({ role: m.role, content: have(m).length ? [...have(m).map((i) => ({ type: 'image', source: { type: 'base64', media_type: mime(pics.get(i)!), data: b64(pics.get(i)!) } })), { type: 'text', text: m.text }] : m.text })) }),
+        messages: msgs.map((m) => ({ role: m.role, content: have(m).length ? [...have(m).map((i) => ({ type: 'image', source: { type: 'base64', media_type: mime(pics.get(i)!), data: b64(pics.get(i)!) } })), { type: 'text', text: full(m) }] : full(m) })) }),
     })
-    const j = await r.json()
-    if (!r.ok) throw new Error(j.error?.message ?? r.statusText)
-    return (j.content as { type: string; text?: string }[]).filter((b) => b.type === 'text').map((b) => b.text).join('')
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error?.message ?? r.statusText)
+    await sse(r, (e) => {
+      if (e.type === 'error') throw new Error(e.error?.message ?? 'stream error')
+      if (e.delta?.type === 'text_delta') onText((out += e.delta.text))
+    })
+    return out
   }
   if (id === 'deepseek') {
-    const j = await dsChat(key, { model, messages: [{ role: 'system', content: system }, ...msgs.map((m) => ({ role: m.role, content: m.text }))] })
+    const j = await dsChat(key, { model, messages: [{ role: 'system', content: system }, ...msgs.map((m) => ({ role: m.role, content: full(m) }))] }, onText)
     return j.choices?.[0]?.message?.content ?? ''
   }
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`, {
     method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
     body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] },
-      contents: msgs.map((m) => ({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.text }, ...have(m).map((i) => ({ inlineData: { mimeType: mime(pics.get(i)!), data: b64(pics.get(i)!) } }))] })),
+      contents: msgs.map((m) => ({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: full(m) }, ...have(m).map((i) => ({ inlineData: { mimeType: mime(pics.get(i)!), data: b64(pics.get(i)!) } }))] })),
       generationConfig: { thinkingConfig: { thinkingBudget: budget } } }),
   })
-  const j = await r.json()
-  if (!r.ok) throw new Error(j.error?.message ?? r.statusText)
-  return (j.candidates?.[0]?.content?.parts as { text?: string }[] | undefined)?.map((p) => p.text ?? '').join('') ?? ''
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error?.message ?? r.statusText)
+  await sse(r, (j) => {
+    if (j.error) throw new Error(j.error.message ?? 'stream error')
+    const t = (j.candidates?.[0]?.content?.parts as { text?: string }[] | undefined)?.map((p) => p.text ?? '').join('')
+    if (t) onText((out += t))
+  })
+  return out
 }
 
 /** The CLIs are single-shot, so the saved conversation is replayed inside the prompt. */
-const cliPrompt = (system: string, msgs: Msg[], paths: Map<string, string>, hits: string) =>
-  `${system}\n\n# Conversation\n` + msgs.map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.text}${(m.pics ?? []).filter((i) => paths.has(i)).map((i) => ` [Image: ${paths.get(i)}]`).join('')}`).join('\n\n') + (hits && `\n\n# Best matches for the last message\n${hits}`) + '\n\nAssistant:'
+const cliPrompt = (system: string, msgs: Msg[], paths: Map<string, string>, extra: string) =>
+  `${system}\n\n# Conversation\n` + msgs.map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.text}${(m.pics ?? []).filter((i) => paths.has(i)).map((i) => ` [Image: ${paths.get(i)}]`).join('')}`).join('\n\n') + (extra && `\n\n${extra}`) + '\n\nAssistant:'
 
 // ---- persistence: settings are global, chats are per project ----
 const load = <T,>(k: string, d: T): T => { try { return JSON.parse(localStorage.getItem(k) ?? '') as T } catch { return d } }
@@ -155,6 +171,7 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
   const [busy, setBusy] = useState(false)
   const [pending, setPending] = useState<{ id: string; data: string }[]>([]) // pictures attached to the message being written
   const [freshAt, setFreshAt] = useState(0)
+  const [live, setLive] = useState('') // the answer so far, while it streams
   const end = useRef<HTMLDivElement>(null)
 
   useEffect(() => { save(CFG, cfg) }, [cfg])
@@ -172,8 +189,8 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
   // `agy --effort` conflicts with --model, so there effort is part of the model name (…-high).
   const effortFixed = id === 'agy' && mode === 'cli'
   const real = mode === 'cli' ? inTauri : !!key || (id === 'nano' && inTauri) // Nano Banana without a key is drawn by the Antigravity CLI
-  // Claude is routed in CLI mode only (Haiku is called there without an effort level); the CLI's own agy list has no known cheap entry.
-  const routable = id === 'claude' ? mode === 'cli' : id !== 'nano' && !fromCli
+  // The CLI's own agy list has no known cheap entry. Measured on 15 questions about the code: Haiku 30/30 right at 1/23 of Sonnet's price.
+  const routable = id !== 'nano' && !fromCli
   const status = t(real ? (mode === 'cli' ? 'online' : 'ready') : mode === 'cli' ? 'simBrowser' : 'simKey')
 
   const slowNotes = useDebounced(notes) // note edits settle before the map is rebuilt
@@ -189,15 +206,18 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
     const text = prompt.trim()
     if (!text || busy) return
     if (text === '/clear') { newChat(); setPending([]); return } // a fresh conversation; the old one stays in the history
-    const user: Msg = { role: 'user', text, at: Date.now(), pics: pending.length ? pending.map((p) => p.id) : undefined }
+    setPrompt(''); setPending([]); setBusy(true); setLive('')
+    // when the question surely points at one file and names a definition in it, the code itself goes along
+    const code = inTauri && id !== 'nano' ? await sliceFor(notes, text, readSource).catch(() => '') : ''
+    const user: Msg = { role: 'user', text, at: Date.now(), pics: pending.length ? pending.map((p) => p.id) : undefined, code: code || undefined }
     let cid = activeId
     if (!chat) { cid = uid(); setChats((cs) => [{ id: cid, title: text.slice(0, 48), msgs: [user], at: Date.now() }, ...cs]); setActiveId(cid) }
     else patch(cid, (c) => ({ ...c, msgs: [...c.msgs, user], at: Date.now() }))
-    setPrompt(''); setPending([]); setBusy(true)
     // the map stays identical between questions, so the provider's prompt cache can reuse it
     const history = trim([...msgs, user])
     const system = SYSTEM(map)
-    const tin = tokens(system + history.map((m) => m.text).join('\n'))
+    const cliSys = code ? SLICE_SYSTEM : system // the CLI agent got the code: it needs no map
+    const tin = tokens((mode === 'cli' ? cliSys : system) + history.map(full).join('\n'))
     let reply: Msg
     // A short lookup the map answers with confidence (one file far ahead of the rest) does not need the big model.
     const easy = !!cfg.auto && routable && !user.pics && text.length <= 200 && sure(notes, text)
@@ -222,15 +242,16 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
         reply = { role: 'assistant', text: r.text, img: r.img, imgId: iid, at: Date.now(), tin: r.input, tout: r.output }
       } else {
         // The CLI agent can open files, so it also gets the closest files with the lines of their definitions (after the dialogue: the cached start is untouched).
-        const run = () => runAgent(a.cli, cliPrompt(system, history, paths, topHits(notes, text, 5)), useModel, effortFixed || useModel.includes('haiku') ? '' : level).then((r) => { recordRead(r.files); return r.text })
-        const out = mode === 'cli' ? await run() : await callApi(id, key, system, history, useModel, easy ? 0 : effort, pics)
+        const hits = topHits(notes, text, 5)
+        const run = () => runAgent(a.cli, cliPrompt(cliSys, history, paths, code ? `${CODE_HEAD}\n${code}` : hits && `# Best matches for the last message\n${hits}`), useModel, effortFixed || useModel.includes('haiku') ? '' : level).then((r) => { recordRead(r.files); return r.text })
+        const out = mode === 'cli' ? await run() : await callApi(id, key, system, history, useModel, easy ? 0 : effort, pics, setLive)
         reply = { role: 'assistant', text: out.trim(), at: Date.now(), tin, tout: tokens(out), via: easy ? list.find((m) => m[0] === useModel)?.[1] ?? useModel : undefined } // via = the cheaper model that answered instead of yours
       }
     } catch (e) {
       reply = { role: 'assistant', text: `Error: ${e instanceof Error ? e.message : e}`, at: Date.now(), error: true }
     }
     patch(cid, (c) => ({ ...c, msgs: [...c.msgs, reply], at: Date.now() }))
-    setFreshAt(reply.at); setBusy(false)
+    setFreshAt(mode === 'api' && id !== 'nano' ? 0 : reply.at); setBusy(false); setLive('') // a streamed answer was already read as it came: no typewriter
   }
 
   // The picture is written next to the notes (images/<id>.png) and a Markdown link to it goes into the open note.
@@ -247,7 +268,7 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
   }
   const addFiles = async (files: File[]) => { const got = await readPics(files); setPending((l) => [...l, ...got]) }
   const scroll = () => end.current?.scrollIntoView({ block: 'end' })
-  useEffect(() => { scroll() }, [msgs.length, busy])
+  useEffect(() => { scroll() }, [msgs.length, busy, live])
 
   // Both sources are normalised to "% used" rows. Claude: Anthropic's plan endpoint. Antigravity: the CLI's `/usage` (remaining_fraction per model group).
   const refreshPlan = () => {
@@ -357,7 +378,9 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
             <span className="text-micro text-dim">{new Date(m.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
           </div>
           : <Assistant key={m.at} label={a.label} m={m} fresh={m.at === freshAt && i === msgs.length - 1} canInsert={!!note} onTick={scroll} onInsert={() => onInsert(m.text)} onInsertImage={() => insertImage(m)} />)}
-        {busy && <span className="anim-fade text-micro text-dim animate-pulse">{t('thinking')}</span>}
+        {busy && (live
+          ? <div className="flex flex-col gap-2"><span className="flex items-center gap-1.5 text-micro text-accent"><Sparkles size={11} />{a.label}</span><Markdown text={live} /></div>
+          : <span className="anim-fade text-micro text-dim animate-pulse">{t('thinking')}</span>)}
         <div ref={end} />
       </div>
 

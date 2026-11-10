@@ -1,0 +1,17 @@
+[
+ { "q": "What branch name does the worktree create function give an isolated run?", "expect": ["armyx/"] },
+ { "q": "How many label-propagation rounds does the communities function in the layout run at most?", "expect": ["\\b15\\b"] },
+ { "q": "In the orchestra's retry helper, what is the default wait in milliseconds before the first retry?", "expect": ["2[, ]?000|\\b2 ?s"] },
+ { "q": "What HTTP header carries the API key when callApi calls Claude?", "expect": ["x-api-key"] },
+ { "q": "What max_tokens value does callApi send to the Claude API?", "expect": ["16[, ]?000|16k"] },
+ { "q": "How often, in milliseconds, does useTypewriter reveal the next piece of text?", "expect": ["\\b16\\b"] },
+ { "q": "Which characters does the Rust valid function allow in a note name?", "expect": ["alphanumeric|letters|a-z", "_|underscore", "-|hyphen|dash"] },
+ { "q": "To what length does note_name truncate a note name in the scanner?", "expect": ["\\b60\\b"] },
+ { "q": "What error text does parse_answer use when the CLI answer is empty and has neither subtype nor status?", "expect": ["empty answer"] },
+ { "q": "Which git commands does the worktree stamp function hash?", "expect": ["rev-parse", "status", "diff"] },
+ { "q": "In the orchestra's slim function, after how many characters is a saved answer cut?", "expect": ["4[, ]?000"] },
+ { "q": "What CSS classes does the editor's highlight function give a heading line?", "expect": ["font-semibold"] },
+ { "q": "Under which folder of the documents directory does newProjectId put a new project?", "expect": ["Taurium"] },
+ { "q": "What name pattern do the generated test notes get in loadNotes?", "expect": ["node-"] },
+ { "q": "How many best matches does topHits return by default?", "expect": ["\\b12\\b|twelve"] }
+]

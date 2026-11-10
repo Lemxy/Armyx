@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest'
-import { graphMap, links, mapIds, mapVsSource, scoredHits, subMap, sure, tokens, toMarkdown, topHits } from './deso'
+import { graphMap, links, mapIds, mapVsSource, scoredHits, sliceFor, subMap, sure, tokens, toMarkdown, topHits, trimBatch } from './deso'
+import { sse } from './sse'
 
 test('toMarkdown converts props, data, todos and links', () => {
   const { md, kinds } = toMarkdown('?type: core\n!cpu 4GHz\n+done\n-todo ->@kernel')
@@ -100,4 +101,31 @@ test('sure: one file far ahead of the rest', () => {
   expect(sure(notes, 'where is PAY_LIMIT')).toBe(true)
   expect(sure(notes, 'which helper file')).toBe(false)
   expect(sure(notes, 'nothing matches zzz')).toBe(false)
+})
+
+test('sliceFor: the lines of the definition a sure question names, nothing when unsure or when the file changed', async () => {
+  const notes = [
+    { name: 'pay', content: '# pay\n?path: src/pay.ts\n?symbols: PAY_LIMIT, chargeCard\n?spans: chargeCard:2-4, refund:6-8' },
+    { name: 'util', content: '# util\n?path: src/util.ts\n?symbols: helper' },
+    { name: 'other', content: '# other\n?path: src/other.ts\n?symbols: helperTwo' },
+  ]
+  const src = 'const PAY_LIMIT = 5\nexport function chargeCard() {\n  return PAY_LIMIT\n}\n\nexport function refund() {\n  return 0\n}'
+  expect(await sliceFor(notes, 'what does chargeCard return', async () => src)).toBe('# src/pay.ts lines 2-4\nexport function chargeCard() {\n  return PAY_LIMIT\n}')
+  expect(await sliceFor(notes, 'which helper file', async () => src)).toBe('')
+  expect(await sliceFor(notes, 'what does chargeCard return', async () => '// rewritten\n' + src)).toBe('')
+})
+
+test('trimBatch: the start of the history stays put between overflows', () => {
+  const msgs = Array.from({ length: 40 }, (_, i) => ({ i, text: 'x'.repeat(10) })), len = (m: { text: string }) => m.text.length
+  const starts = Array.from({ length: 40 }, (_, n) => trimBatch(msgs.slice(0, n + 1), 24, 30000, len)[0].i)
+  expect(new Set(starts)).toEqual(new Set([0, 12, 24])) // two moves in 40 messages; one message per turn would move 16 times
+  expect(trimBatch(msgs, 24, 30000, len).length).toBe(16)
+  expect(trimBatch(msgs, 24, 100, len).map((m) => m.i)).toEqual([36, 37, 38, 39]) // the size limit cuts in the same steps
+})
+
+test('sse: JSON of every data line, also when the network cuts a line in two', async () => {
+  const body = new ReadableStream({ start(c) { for (const p of ['data: {"a"', ':1}\n\nevent: x\ndata: [DONE]\ndata: {"a":2}\n']) c.enqueue(new TextEncoder().encode(p)); c.close() } })
+  const got: number[] = []
+  await sse(new Response(body), (j) => got.push(j.a))
+  expect(got).toEqual([1, 2])
 })
