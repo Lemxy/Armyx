@@ -1,0 +1,15 @@
+# src/components/Sidebar.tsx
+?path: src/components/Sidebar.tsx
+?kind: tsx
+?lines: 136
+?generated: scan
+?calls: src/components/ContextMenu.tsx(ContextMenu), src/debounce.ts(useDebounced), src/i18n.ts(useI18n), src/vault.ts(deleteNote)
+?exports: Sidebar
+?symbols: LIMIT, TAGS_SHOWN, Marked, Sidebar
+?spans: Marked:18-22, Sidebar:24-136
+#tsx #src
+->@src-debounce-ts
+->@src-deso-ts
+->@src-i18n-ts
+->@src-vault-ts
+->@src-components-contextmenu-tsx

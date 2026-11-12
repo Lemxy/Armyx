@@ -1,0 +1,15 @@
+# src/keys.ts
+?path: src/keys.ts
+?kind: ts
+?lines: 34
+?generated: scan
+?about: API keys live in the operating system's keychain on the desktop (Windows Credential Manager, macOS K
+?doc: API keys live in the operating system's keychain on the desktop (Windows Credential Manage entry holding all of them; never in a project folder or exported notes. getKey stays synch start. In the browser (no keychain) they stay in localStorage, and so do they if the keych
+?calls: src-tauri/src/lib.rs(keys_load+keys_save), ~src-tauri/src/scan.rs(resolve)
+?callers: src/main.tsx
+?exports: loadKeys, getKey, setKey, onKeys
+?symbols: loadKeys
+#ts #src
+->@src-vault-ts
+->@src-tauri-src-lib-rs
+->@src-tauri-src-scan-rs

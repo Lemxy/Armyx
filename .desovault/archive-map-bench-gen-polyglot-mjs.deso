@@ -1,0 +1,14 @@
+# archive/map-bench/gen-polyglot.mjs
+?path: archive/map-bench/gen-polyglot.mjs
+?kind: mjs
+?lines: 121
+?generated: scan
+?about: Generates a small polyglot shop app for the cross-module bug benchmark: a Node server (route, rules
+?doc: Generates a small polyglot shop app for the cross-module bug benchmark: a Node server (rou feature), a Python command-line client and a web (JavaScript) client per feature, and inte call both clients. Server and clients meet only at an HTTP route string; the totals meet i node bench/gen-polyglot.mjs <out dir>
+?calls: ~src-tauri/src/scan.rs(resolve)
+?callers: ~src/vault.ts
+?exports: roundMoney, withTax, summarize$, register, load, ITEMS, startServer
+?symbols: /api, FEATURES, summarize$, register, load, ITEMS, startServer, EXPECTED
+?spans: summarize$:31-40, load:60-64, startServer:76-89
+#mjs #archive
+->@src-tauri-src-scan-rs

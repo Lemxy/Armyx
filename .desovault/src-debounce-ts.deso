@@ -1,0 +1,10 @@
+# src/debounce.ts
+?path: src/debounce.ts
+?kind: ts
+?lines: 8
+?generated: scan
+?about: `v` after it has stopped changing for `ms`: keeps whole-project calculations off the typing path.
+?callers: src/components/AgentSidebar.tsx, src/components/Sidebar.tsx
+?exports: useDebounced
+?symbols: useDebounced
+#ts #src

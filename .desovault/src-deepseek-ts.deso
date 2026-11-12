@@ -1,0 +1,12 @@
+# src/deepseek.ts
+?path: src/deepseek.ts
+?kind: ts
+?lines: 36
+?generated: scan
+?about: DeepSeek chat call that tries several OpenAI-compatible gateways and keeps the first one that answer
+?doc: DeepSeek chat call that tries several OpenAI-compatible gateways and keeps the first one t The last working gateway is remembered and tried first next time.
+?exports: dsChat, orChat
+?symbols: GATEWAYS, LAST, TIMEOUT, dsChat
+#ts #src
+->@src-keys-ts
+->@src-sse-ts

@@ -1,0 +1,14 @@
+# src/mapmem.ts
+?path: src/mapmem.ts
+?kind: ts
+?lines: 28
+?generated: scan
+?about: What the map remembers about a project between sessions (local storage): the number of each note, an
+?doc: What the map remembers about a project between sessions (local storage): the number of eac
+?calls: ~src-tauri/src/lib.rs(opened)
+?exports: projectIds, mapOpts, coRead, recordRead
+?symbols: CO_MAX
+#ts #src
+->@src-deso-ts
+->@src-vault-ts
+->@src-tauri-src-lib-rs

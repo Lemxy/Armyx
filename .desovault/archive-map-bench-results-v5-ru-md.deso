@@ -1,0 +1,9 @@
+# archive/map-bench/RESULTS-v5.ru.md
+?path: archive/map-bench/RESULTS-v5.ru.md
+?kind: md
+?lines: 127
+?generated: scan
+?about: Результаты v5: что сократило токены, а что нет
+?calls: ~src/deso.ts(MAP_INTRO)
+#md #archive
+->@src-deso-ts

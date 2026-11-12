@@ -1,0 +1,11 @@
+# src/components/StoredImg.tsx
+?path: src/components/StoredImg.tsx
+?kind: tsx
+?lines: 13
+?generated: scan
+?about: A generated picture: `src` while it is still in memory, otherwise loaded from the image store by `id
+?callers: src/components/AgentSidebar.tsx
+?exports: StoredImg
+?symbols: StoredImg
+#tsx #src
+->@src-imgs-ts

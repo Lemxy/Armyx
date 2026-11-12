@@ -21,15 +21,9 @@ const active = (process.env.MODES ?? 'alone,map,slice').split(',')
 // ---- the prompts: `map` is what the chat sends in CLI mode today (SYSTEM + cliPrompt in AgentSidebar.tsx) ----
 const SYSTEM = `You are the assistant inside Taurium, a knowledge-graph note app. ${d.MAP_INTRO} Be concise and answer in the user's language.\n\n# Graph map\n${d.graphMap(notes)}`
 const mapPrompt = (q) => `${SYSTEM}\n\n# Conversation\nUser: ${q}\n\n# Best matches for the last message\n${d.topHits(notes, q, 5)}\n\nAssistant:`
-/** Idea 1: the lines of the definitions the question names, from the best file, when that file is a sure match. */
-const slice = (q) => {
-  if (!d.sure(notes, q)) return null
-  const n = d.scoredHits(notes, q)[0].note, path = d.prop(n.content, 'path'), asked = new Set(d.terms(q))
-  const spans = (d.prop(n.content, 'spans')?.split(', ') ?? []).filter((s) => d.terms(s.split(':')[0]).some((t) => asked.has(t))).slice(0, 2)
-  if (!spans.length) return null
-  const lines = readFileSync(`${project}/${path}`, 'utf8').split('\n')
-  return spans.map((s) => { const [a, b] = s.split(':')[1].split('-').map(Number); return `# ${path} lines ${a}-${b}\n${lines.slice(a - 1, Math.min(b, a + 120)).join('\n')}` }).join('\n\n')
-}
+/** Idea 1: the lines of the definitions the question names: sliceFor in src/deso.ts, the same code the chat runs. */
+const sliced = new Map(await Promise.all(questions.map(async ({ q }) => [q, await d.sliceFor(notes, q, async (p) => readFileSync(`${project}/${p}`, 'utf8'))])))
+const slice = (q) => sliced.get(q) || null
 const slicePrompt = (q) => { const s = slice(q); return s ? `You are working in a code project. Be concise. The code below is the definition that most likely answers the question; if it does not, search (Grep/Glob) or Read.\n\n${s}\n\n# Question\n${q}` : mapPrompt(q) }
 const modes = { alone: (q) => q, map: mapPrompt, slice: slicePrompt }
 const hit = (text, expect) => expect.every((e) => new RegExp(e, 'i').test(text))

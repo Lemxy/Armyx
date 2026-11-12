@@ -1,0 +1,13 @@
+# archive/map-bench/orchestra.mjs
+?path: archive/map-bench/orchestra.mjs
+?kind: mjs
+?lines: 150
+?generated: scan
+?about: What do the orchestra's token savers save? Five before/after pairs, each on real `claude -p` runs wi
+?doc: What do the orchestra's token savers save? Five before/after pairs, each on real `claude - slice    a worker's brief with the code it names attached            vs the brief alone    resume   a review round that continues the worker's session          vs a fresh call with  diff     a reviewer that gets the git diff                           vs one that has to fi final    the lead's final answer on Haiku                            vs on the lead's own  stagger  4 calls on a cold prompt cache, 3 of them 6 s behind        vs all 4 at once node --experimental-strip-types --no-warnings archive/map-bench/orchestra.mjs <project> <g Env: MODEL=claude-sonnet-5-5  CHEAP=claude-haiku-5-5  REPS=2  ONLY=slice,resume,diff,final
+?calls: ~src-tauri/src/lib.rs(run_agent), ~src/components/AgentSidebar.tsx(CHEAP)
+?symbols: REPS, ONLY, BRIEF, FILES, CODE, DIFF, REVIEW_PROTOCOL, READ, TASKS
+#mjs #archive
+->@src-deso-ts
+->@src-tauri-src-lib-rs
+->@src-components-agentsidebar-tsx

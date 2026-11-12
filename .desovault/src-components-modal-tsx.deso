@@ -1,0 +1,13 @@
+# src/components/Modal.tsx
+?path: src/components/Modal.tsx
+?kind: tsx
+?lines: 27
+?generated: scan
+?about: play the exit animation, then really close (timer, not animationend, so it also works with motion of
+?doc: play the exit animation, then really close (timer, not animationend, so it also works with
+?calls: src/i18n.ts(useI18n)
+?callers: src/App.tsx, src/components/ProjectModal.tsx, src/components/SettingsModal.tsx
+?exports: Modal
+?symbols: Modal
+#tsx #src
+->@src-i18n-ts

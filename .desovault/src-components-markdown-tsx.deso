@@ -1,0 +1,11 @@
+# src/components/Markdown.tsx
+?path: src/components/Markdown.tsx
+?kind: tsx
+?lines: 30
+?generated: scan
+?about: Tiny Markdown subset for agent replies: fences, headings, lists, **bold**, `code`. Built as React no
+?doc: Tiny Markdown subset for agent replies: fences, headings, lists, **bold**, `code`. Built a shortcut: no tables/links/nested lists; swap in a real parser if replies need them.
+?callers: src/components/AgentSidebar.tsx, ~src/deso.ts
+?exports: Markdown
+?symbols: Markdown
+#tsx #src

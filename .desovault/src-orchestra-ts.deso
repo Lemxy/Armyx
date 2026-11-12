@@ -1,0 +1,18 @@
+# src/orchestra.ts
+?path: src/orchestra.ts
+?kind: ts
+?lines: 390
+?generated: scan
+?about: The orchestra engine: types, limits and the run itself. No React and no Tauri in here: everything it
+?doc: The orchestra engine: types, limits and the run itself. No React and no Tauri in here: eve session + resume: the engine's own claude session for a block inside one run (a review rou The dialogue is saved with the orchestra. `task` = what an agent was asked, `user` = a mes `usage` = the table of who spent what, posted after every run or answer (rows; no ids, so  iso: agents work in a git worktree, wt: that worktree exists and holds changes to review;  leadChat: a message to the lead is just answered, instead of briefing every agent again cond: a link that carries its answer only when the sender's answer is OK ("ok") or is not  shortcut: a fixed wait, not the first call's first token (run_agent reports nothing until
+?calls: ~src-tauri/src/lib.rs(opened+run_agent), ~src-tauri/src/scan.rs(resolve), src/deso.ts(MAP_INTRO)
+?callers: src/components/Orchestra.tsx, src/orchestra.test.ts
+?exports: Agent, Use, Node, Opts, Entry, Row, RunInfo, Orch
+?symbols: INPUT_MAX, BUDGET, MAX_TURNS, LEAD_TURNS, RUN_CAP, RUN_TOKEN_CAP, RETRIES, CACHE_TTL, STAGGER, READ_ONLY, BRIEF, REVIEW_PROTOCOL, DIRECT, TRANSIENT, READ_TOOLS, TOOL_TEXT, FILES, CODE, DIFF, runOrchestra, leadChat, SAVE_MAX, LOG_MAX, LOG_MIN, save
+?spans: ownCost:53-57, coldWait:58-62, hash:75-81, retry:83-91, section:95-99, mergeBrief:105-110, runOrchestra:143-334, leadChat:337-355, slim:363-372, fromTemplate:382-390
+#ts #src
+->@src-vault-ts
+->@src-i18n-ts
+->@src-deso-ts
+->@src-tauri-src-lib-rs
+->@src-tauri-src-scan-rs

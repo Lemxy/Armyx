@@ -1,0 +1,14 @@
+# src-tauri/src/scan.rs
+?path: src-tauri/src/scan.rs
+?kind: rs
+?lines: 627
+?generated: scan
+?about: Project scanner: turns an arbitrary code/docs folder into a graph of `.deso` notes.
+?doc: Project scanner: turns an arbitrary code/docs folder into a graph of `.deso` notes. One note per source file (capped), edges from relative imports, plus a `project-map` overv Everything is computed first and written in one batch, so a failed scan leaves nothing hal What one file says on its own (no other file is needed to work it out), so it can be reuse What a file defines (searchable symbols) and what it refers to (HTTP routes, Tauri command A file the walk found, with the size and modification time it already had to look up. Join + normalize `.`/`..` on forward-slash paths. First lines of the docstrings (Python) and the comment lines of a file, up to ~700 charact likely to be phrased like, which names and the one-line `about` do not carry.
+?calls: ~src-tauri/src/worktree.rs(create)
+?callers: src-tauri/src/lib.rs, ~archive/map-bench/README.md, ~archive/map-bench/gen-polyglot.mjs, ~archive/map-bench/paraphrase.mjs, ~src/components/Orchestra.tsx, ~src/components/SourceEditor.tsx, ~src/deso.test.ts, ~src/keys.ts
+?exports: Scanner, scan_cached, scan
+?symbols: MAX_FILES, MAX_NODES, MAX_BYTES, MAX_LINKS, SKIP_DIRS, MAX_CALLS, EXTS, walk, join, dir_of, quoted, doc_text, ident, parse, all_caps, push, route_key, is_js, def_name, SPAN_FILE, SPAN_MIN, MAX_SPANS, spans, syms, ident_set, note_name, clean, SCHEMA, resolve, SCANNER, scan_cached, scan, extract, build, ARMYX_MAX_NODES, scans_imports_and_names, links_files_by_the_symbols_they_use_without_an_import, an_import_line_makes_the_link_certain, links_routes_and_commands_across_projects, PAY_LIMIT, auth_pay, spans_give_the_lines_of_each_definition, join_normalizes, incremental_scan_equals_a_full_scan_and_reads_only_what_changed
+?spans: walk:56-72, join:79-89, quoted:93-100, doc_text:104-119, parse:125-188, def_name:203-211, spans:220-241, syms:243-278, note_name:284-291, resolve:300-306, scan_cached:326-330, scan:342-370, scans_imports_and_names:472-491, links_files_by_the_symbols_they_use_without_an_import:494-498, an_import_line_makes_the_link_certain:520-524, links_routes_and_commands_across_projects:537-543, spans_give_the_lines_of_each_definition:562-569, incremental_scan_equals_a_full_scan_and_reads_only_what_changed:578-584
+#rs #srctauri
+->@src-tauri-src-worktree-rs

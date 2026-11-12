@@ -1,0 +1,8 @@
+# tailwind.config.js
+?path: tailwind.config.js
+?kind: js
+?lines: 31
+?generated: scan
+?about: Every colour is a CSS variable (src/index.css); the function keeps Tailwind's /opacity modifiers wor
+?doc: Every colour is a CSS variable (src/index.css); the function keeps Tailwind's /opacity mod Plain utilities get opacityValue = 'var(--tw-bg-opacity)' (not a number): treat that as so
+#js

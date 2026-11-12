@@ -1,0 +1,25 @@
+# project-map
+?root: deso-vault
+?generated: scan
+?schema: 3
+?files: 74 scanned, 74 indexed
+?source_bytes: 617616
+#overview
+.: 6 files
+archive: 21 files
+mcp: 1 files
+src: 39 files
+src-tauri: 7 files
+Hubs (most connected):
+->@src-components-agentsidebar-tsx
+->@src-components-orchestra-tsx
+->@src-deso-ts
+->@src-vault-ts
+->@src-app-tsx
+->@src-i18n-ts
+->@src-tauri-src-lib-rs
+->@src-tauri-src-scan-rs
+->@src-tauri-src-worktree-rs
+->@src-components-sourceeditor-tsx
+->@src-keys-ts
+->@src-orchestra-ts

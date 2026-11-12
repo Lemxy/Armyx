@@ -1,0 +1,14 @@
+# src/nano.ts
+?path: src/nano.ts
+?kind: ts
+?lines: 38
+?generated: scan
+?about: Nano Banana = Gemini image models. One call: the conversation so far in, text plus one inline image
+?doc: Nano Banana = Gemini image models. One call: the conversation so far in, text plus one inl No API key: Gemini 3.8 Flash (High) in the Antigravity CLI draws it (your Google subscript
+?callers: src/components/AgentSidebar.tsx, src/components/Orchestra.tsx
+?exports: NanoOut, nanoImage, nanoAgy
+?symbols: nanoImage, DRAW, AGY_MODEL, nanoAgy
+#ts #src
+->@src-imgs-ts
+->@src-pics-ts
+->@src-vault-ts

@@ -1,5 +1,5 @@
 import { expect, test, vi } from 'vitest'
-import { fromTemplate, isWriter, LEAD_TURNS, leadChat, READ_ONLY, RETRIES, retry, RUN_CAP, RUN_TOKEN_CAP, runOrchestra, save, section, slim, type Deps, type Entry, type Node, type Opts, type Orch } from './orchestra'
+import { fromTemplate, isWriter, LEAD_TURNS, leadChat, READ_ONLY, RETRIES, retry, coldWait, ownCost, STAGGER, RUN_CAP, RUN_TOKEN_CAP, runOrchestra, save, section, slim, type Deps, type Entry, type Node, type Opts, type Orch } from './orchestra'
 import { dsUsage } from './dsprice'
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -17,7 +17,7 @@ function rig(o: Orch, exec: (n: Node, prompt: string, opts: Opts) => Promise<Ret
     exec: (n, build, opts) => { const prompt = build(false); calls.push({ id: n.id, prompt, opts }); return exec(n, prompt, opts) },
     patch: (id, p) => { Object.assign(nodes.get(id)!, p) },
     addLog: (e) => { log.push({ ...e, at: 0 }) },
-    stamp: async () => '', stopped: () => false, history: () => '', embed: () => '', leadMap: () => 'MAP', subMap: () => '', filesStamp: async () => '',
+    stamp: async () => '', stopped: () => false, history: () => '', embed: () => '', leadMap: () => 'MAP', subMap: () => '', slice: async () => '', diff: async () => '', filesStamp: async () => '',
     label: (n) => n.id, who: (n) => n.id, t: (k, v) => (v ? `${k}${JSON.stringify(v)}` : k),
     ...over,
   }
@@ -381,4 +381,68 @@ test('a worker gets the files its brief names; their line numbers are not part o
   const r2 = rig(o2, async (n) => lead(n), over)
   await runOrchestra(o2, r2.d)
   expect(r2.calls).toHaveLength(0)
+})
+
+test('a review round continues the session: only the feedback, the new input and the diff are sent', async () => {
+  const o = orch([node('A', { agent: 'claude' }), node('R', { agent: 'claude', review: 2 })], [['L', 'A'], ['A', 'R']])
+  const calls: { id: string; prompt: string; opts: Opts }[] = []
+  let a = 0, r = 0
+  const rg = rig(o, async (n) => lead(n), {
+    diff: async () => 'DIFF',
+    exec: async (n, build, opts) => {
+      calls.push({ id: n.id, prompt: build(!!opts.resume), opts })
+      return n.id === 'A' ? ans(`code ${++a}`) : n.id === 'R' ? ans(r++ ? 'OK' : 'fix it') : lead(n)
+    },
+  })
+  await runOrchestra(o, rg.d)
+  const [a1, a2] = calls.filter((c) => c.id === 'A'), [r1, r2] = calls.filter((c) => c.id === 'R')
+  expect(a1.opts.resume).toBeUndefined()
+  expect(a2.opts).toMatchObject({ resume: true, session: a1.opts.session })
+  expect(a2.prompt).toContain('# Review feedback\nfix it')
+  expect(a2.prompt).not.toContain('go A') // the brief is already in the session
+  expect(r1.prompt).toContain('# Changes made (git diff)')
+  expect(r2.prompt).toContain('# New input from previous agents\n## A\ncode 2')
+  expect(r2.prompt).not.toContain('# Review protocol')
+})
+
+test('the code a brief names is sent with it, and does not change the cache key', async () => {
+  const o = orch([node('A')], [['L', 'A']])
+  let code = 'CODE1'
+  const r1 = rig(o, async (n) => lead(n), { slice: async () => code })
+  await runOrchestra(o, r1.d)
+  expect(r1.calls.find((c) => c.id === 'A')!.prompt).toContain('CODE1')
+  code = 'CODE2'
+  const o2 = { ...o, nodes: [...r1.nodes.values()] }
+  const r2 = rig(o2, async (n) => lead(n), { slice: async () => code })
+  await runOrchestra(o2, r2.d)
+  expect(r2.ids()).not.toContain('A')
+})
+
+test('the final answer is written by the cheap model, and the run reports who spent what', async () => {
+  const o = orch([node('A')], [['L', 'A']])
+  const seen: (string | undefined)[] = []
+  const r = rig(o, async (n) => { seen.push(n.model); return lead(n) }, { cheap: (n) => ({ ...n, agent: 'deepseek', model: 'flash' }) })
+  const info = await runOrchestra(o, r.d)
+  expect(seen.at(-1)).toBe('flash')
+  expect(r.calls.at(-1)!.opts.tools).toBe('')
+  expect(info?.rows?.map((x) => x.who)).toEqual(['L', 'A', 'L · orchFinal'])
+})
+
+test('coldWait: the first call goes at once, the ones right behind it wait for its cache', () => {
+  const warm = new Map<string, number>()
+  expect(coldWait(warm, 'k', 1000)).toBe(0)
+  expect(coldWait(warm, 'k', 1500)).toBe(STAGGER - 500)
+  expect(coldWait(warm, 'other', 1500)).toBe(0)
+  expect(coldWait(warm, 'k', 1000 + STAGGER)).toBe(0)
+  expect(coldWait(warm, 'k', 1000 + 6 * 60_000)).toBe(0) // the cache expired: this call writes it again
+  expect(coldWait(warm, 'k', 1001 + 6 * 60_000)).toBe(STAGGER - 1)
+})
+
+test('ownCost: a continued session reports its total, a call costs only what was added', () => {
+  const seen = new Map<string, number>()
+  expect(ownCost(seen, 's', 0.02)).toBe(0.02)
+  expect(ownCost(seen, 's', 0.05)).toBeCloseTo(0.03)
+  expect(ownCost(seen, 'other', 0.01)).toBe(0.01)
+  expect(ownCost(new Map(), 's', 0.07, 0.05)).toBeCloseTo(0.02) // after a restart: the figure saved with the block
+  expect(ownCost(new Map(), 's', 0.01, 0.05)).toBe(0) // never negative
 })

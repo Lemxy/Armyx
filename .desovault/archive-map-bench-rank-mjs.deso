@@ -1,0 +1,10 @@
+# archive/map-bench/rank.mjs
+?path: archive/map-bench/rank.mjs
+?kind: mjs
+?lines: 31
+?generated: scan
+?about: Offline ranking check (no API calls): share of the expected files found in the top k, with and witho
+?doc: Offline ranking check (no API calls): share of the expected files found in the top k, with node --experimental-strip-types --no-warnings bench/rank.mjs <project> <questions.json> [g Without a graph dir the project is scanned into a temp dir (needs cargo).
+?calls: ~src/vault.ts(loadNotes)
+#mjs #archive
+->@src-vault-ts

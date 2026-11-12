@@ -3,23 +3,26 @@ import type { Answer } from './vault'
 import type { Key } from './i18n'
 import { MAP_INTRO } from './deso'
 
-export type Agent = 'claude' | 'agy' | 'codex' | 'deepseek' | 'nano'
+export type Agent = 'claude' | 'agy' | 'codex' | 'deepseek' | 'openrouter' | 'nano'
 export type Use = Omit<Answer, 'text' | 'files' | 'wide'> & { same?: boolean }
 export type Node = {
   id: string; x: number; y: number; kind: 'model' | 'rules' | 'start'
   agent?: Agent; model?: string; effort?: string; tools?: string; name?: string; role?: string // effort: Claude blocks only; tools = the only tools it may use; name = your title for the block; role = the recommended role it was picked for
+  cli?: { skipPerms?: boolean; turns?: number; budget?: number; flags?: string } // CLI settings of the block (gear): false = no --dangerously-skip-permissions; turns/budget override the limits; flags = your own CLI flags
   compact?: boolean // collapsed on the canvas: only the header and a one-line summary
   images?: string[] // pictures attached to this block (ids in the image store); only this block sees them
   review?: number // reviewer: up to this many fix rounds (its input blocks rerun with its feedback until it answers OK); 0/undefined = a normal block
   text: string; notes: string[] // text = context for a model block, the rules themselves for a rules block; notes = embedded note names
   out?: string; img?: string; state?: 'run' | 'ok' | 'err'; since?: number // since = when the current call started (the timer on the block)
  
+  sidCost?: number // what the session `sid` has cost in all so far, as claude last reported it (see ownCost)
   sid?: string; mapSum?: number // claude session continued with --resume, so the dialogue isn't resent; mapSum = hash of the map that session last saw
   final?: string; finalSum?: number // lead only: its answer after the agents reported back, and the hash of the reports it was written from
   sum?: number; base?: number; use?: Use // sum = hash of what the block was last run with: unchanged → its answer is reused; use = tokens of the last call
   read?: string[]; readSum?: number // a reading block that only opened these files: its answer holds until one of them changes (readSum = hash of their state)
 }
-export type Opts = { keep?: boolean; tools?: string; effort?: string; mapSum?: number; maxTurns?: number }
+// session + resume: the engine's own claude session for a block inside one run (a review round continues it instead of starting over)
+export type Opts = { keep?: boolean; tools?: string; effort?: string; mapSum?: number; maxTurns?: number; session?: string; resume?: boolean }
 // The dialogue is saved with the orchestra. `task` = what an agent was asked, `user` = a message you wrote, `run` = a divider between runs.
 // `usage` = the table of who spent what, posted after every run or answer (rows; no ids, so it never enters an agent's dialogue).
 export type Entry = { from: string; to: string; text: string; kind: 'task' | 'reply' | 'error' | 'user' | 'run' | 'usage'; at: number; toId?: string; fromId?: string; quiet?: boolean; rows?: Row[]; img?: string; imgId?: string } // imgId = the picture's id in the image store (src/imgs.ts): img itself is never saved
@@ -27,7 +30,7 @@ export type Row = { who: string; use: Use }
 // iso: agents work in a git worktree, wt: that worktree exists and holds changes to review; queue: one block at a time; default: blocks run as soon as their inputs are ready, in parallel;
 // leadChat: a message to the lead is just answered, instead of briefing every agent again
 // cond: a link that carries its answer only when the sender's answer is OK ("ok") or is not OK ("bad"), keyed `from>to`; runs: summaries of the last runs
-export type RunInfo = { at: number; cost: number; tokens: number; failed: string[]; final?: string }
+export type RunInfo = { at: number; cost: number; tokens: number; failed: string[]; final?: string; rows?: Row[] } // rows = who spent what in that run
 export type Orch = { id: string; name: string; task: string; nodes: Node[]; edges: [string, string][]; cond?: Record<string, 'ok' | 'bad'>; runs?: RunInfo[]; log?: Entry[]; queue?: boolean; iso?: boolean; wt?: boolean; leadChat?: boolean }
 export type Reply = Answer & { img?: string }
 
@@ -38,6 +41,25 @@ export const LEAD_TURNS = 8 // the briefing lead may open a few files (project r
 export const RUN_CAP = 10 // USD per run: no new block starts after this (a running one is still bound by BUDGET). Only Claude and DeepSeek report a cost.
 export const RUN_TOKEN_CAP = 2_000_000 // input + output tokens per run: the same stop for agents that report no cost (agy)
 export const RETRIES = 2
+const CACHE_TTL = 5 * 60_000 // ms a prompt cache entry lives
+// shortcut: a fixed wait, not the first call's first token (run_agent reports nothing until it ends); listen for its first event if this proves too short or too long
+export const STAGGER = 1500 // measured on 3 groups of 4: 1.5 s keeps ~95% of the cache saving of 6 s and answers 4 s sooner
+/** ms a claude call should wait so that it reads the prompt cache which the first call with the same model and tools (`key`) is still writing. */
+/**
+ * What one call cost. `claude` reports a session's cost in total (measured: with --resume, total_cost_usd also holds every earlier
+ * call of that session, while the token counts are the call's own), so the cost reported last time is taken off.
+ * `saved` = that figure from before the app was restarted (Node.sidCost), for a session this map has not seen yet.
+ */
+export const ownCost = (seen: Map<string, number>, sid: string, total: number, saved = 0) => {
+  const before = seen.get(sid) ?? saved
+  seen.set(sid, total)
+  return Math.max(0, total - before)
+}
+export const coldWait = (warm: Map<string, number>, key: string, now = Date.now()) => {
+  const cold = warm.get(key)
+  if (cold === undefined || now - cold > CACHE_TTL) { warm.set(key, now); return 0 }
+  return Math.max(0, cold + STAGGER - now)
+}
 export const READ_ONLY = 'Read,Grep,Glob'
 // Appended to every orchestra agent's system prompt: short answers are fewer output tokens AND smaller inputs for the next block.
 export const BRIEF = 'Answer tersely, like a senior engineer in a hurry: no greeting, no preamble, no restating the task, no closing summary or offers. ' +
@@ -94,6 +116,8 @@ export const TOOL_TEXT = /<(invoke name=|function_calls>|tool_use>)/
 export const isOk = (s: string) => /^ok\b/i.test(s.trim())
 const FILES = '# Files\nFrom the project map. `{name@12-40}` = the lines of that definition at the last scan: read just that range (offset/limit), not the whole file; if it moved, search for the name.'
 // the token counts of a reply apart from what it opened, which is not for the usage table
+const CODE = '# Code\nThe definitions this brief names, as they are in the project now: do not open these files again just to read them.'
+const DIFF = '# Changes made (git diff)\nEverything the agents changed so far. Open a file only when the diff is not enough to judge.'
 const split = ({ text, img, files, wide, ...use }: Reply) => ({ text, img, files, wide, use })
 
 export type Deps = {
@@ -106,6 +130,9 @@ export type Deps = {
   embed: (names: string[]) => string
   leadMap: (query: string) => string // the project map, the notes matching the query first
   subMap: (text: string) => string // for a worker: the files its brief names and their neighbours, '' when it names none
+  slice: (text: string) => Promise<string> // the source of the definitions a brief names, '' when it names none
+  diff: () => Promise<string> // what the agents changed so far, for a reviewer; '' when unknown
+  cheap?: (lead: Node) => Node // who writes the final answer (a merge of reports, no tools): a cheaper model than the lead's own
   filesStamp: (paths: string[]) => Promise<string> // the state of just these files
   label: (n: Node) => string
   who: (n: Node) => string
@@ -143,6 +170,7 @@ export async function runOrchestra(o: Orch, d: Deps, { msg, force = false, only 
   let capped = false
   const bad = new Set<string>() // blocks that failed or were skipped because an input failed; independent branches keep running
   const skipped = new Set<string>() // blocks left out because a link's condition was not met, and everything after them
+  const sids = new Map<string, string>(), sent = new Map<string, string>() // per worker in this run: its claude session, and the input it last saw
   const rows: Row[] = [] // filled as blocks finish; posted as one table when the run ends
   // shortcut: the caps are checked when a block starts, so parallel blocks can overshoot by one round; upgrade to reservations if it matters
   const over = () => {
@@ -180,18 +208,28 @@ export async function runOrchestra(o: Orch, d: Deps, { msg, force = false, only 
       // still tries to read and writes the tool calls out as text, which then reaches the agents as their brief.
       opts = { keep: true, tools: to.length ? READ_ONLY : undefined, maxTurns: to.length ? LEAD_TURNS : undefined, effort: n.effort ?? 'low', mapSum: hash(lmap) }
     } else {
-      const parts = (files: string) => [rules && `# Rules\n${rules}`, !inputs && o.task && `# Task\n${o.task}`, n.text && `# Context\n${n.text}`, embedded && `# Notes\n${embedded}`, inputs && `# Input from previous agents\n${inputs}`,
-        files && `${FILES}\n${files}`, feedback && `# Review feedback\n${feedback}`, n.review && REVIEW_PROTOCOL].filter(Boolean).join('\n\n')
+      const brief = [inputs, n.text, !inputs && o.task].filter(Boolean).join('\n')
+      const ours = ['claude', 'agy', 'codex'].includes(n.agent ?? 'claude')
+      const files = ours ? d.subMap(brief) : ''
+      // The code a brief names comes with it, so the agent does not spend a turn opening the file; a reviewer gets the diff for the same reason.
+      const code = n.agent !== 'nano' ? await d.slice(brief).catch(() => '') : ''
+      const diff = n.review ? await d.diff().catch(() => '') : ''
+      const changes = diff && `${DIFF}\n${clip(diff)}`
+      const parts = (extra: boolean) => [rules && `# Rules\n${rules}`, !inputs && o.task && `# Task\n${o.task}`, n.text && `# Context\n${n.text}`, embedded && `# Notes\n${embedded}`, inputs && `# Input from previous agents\n${inputs}`,
+        extra && files && `${FILES}\n${files}`, extra && code && `${CODE}\n${code}`, extra && changes, feedback && `# Review feedback\n${feedback}`, n.review && REVIEW_PROTOCOL].filter(Boolean).join('\n\n')
+      // A block run again in the same run (a review round) continues its session: it already holds the rules, the brief and the files it read.
+      const moved = inputs !== sent.get(n.id)
+      sent.set(n.id, inputs)
+      const more = () => [moved && inputs && `# New input from previous agents\n${inputs}`, changes, feedback && `# Review feedback\n${feedback}`, n.review ? 'Review again by the same protocol.' : 'Do the work again with this.'].filter(Boolean).join('\n\n')
       // The worker never sees the map; the files its brief names come with their line ranges and neighbours, so it does not search for them.
       // Not part of the key: line numbers shift with every edit, and that alone must not rerun a block.
-      const files = ['claude', 'agy', 'codex'].includes(n.agent ?? 'claude') ? d.subMap([inputs, n.text, !inputs && o.task].filter(Boolean).join('\n')) : ''
-      build = () => parts(files)
-      key = parts('')
+      build = (resumed) => (resumed ? more() : parts(true))
+      key = parts(false)
       opts = { effort: workerEffort(n), tools: n.tools, maxTurns: MAX_TURNS }
     }
     // blocks that can read the project also depend on its state: after the code changed their old answer is stale
-    const stamp = n.agent !== 'deepseek' && n.agent !== 'nano' ? await d.stamp().catch(() => '') : ''
-    const part = [n.agent ?? 'claude', n.model, opts.effort, opts.tools, n.images?.join(','), o.iso].join('\0')
+    const stamp = n.agent !== 'deepseek' && n.agent !== 'openrouter' && n.agent !== 'nano' ? await d.stamp().catch(() => '') : ''
+    const part = [n.agent ?? 'claude', n.model, opts.effort, opts.tools, n.images?.join(','), o.iso, JSON.stringify(n.cli ?? null)].join('\0')
     const base = hash(part + '\0' + key), sum = hash([part, stamp, key].join('\0')), old = prev.get(n.id)
     // "run this block again": blocks outside it ignore the project's state (an earlier writer changed it), only their own input counts
     // A reading block that opened a few files and searched nothing depends on those files only: a change elsewhere leaves its answer good.
@@ -208,7 +246,13 @@ export async function runOrchestra(o: Orch, d: Deps, { msg, force = false, only 
     patch(n.id, { state: 'run', since: Date.now() })
     const writes = isWriter(n, opts.tools)
     try {
-      const call = () => d.exec(n, build, opts)
+      const call = async () => {
+        if (n.kind === 'start') return d.exec(n, build, opts)
+        const sid = sids.get(n.id), fresh = crypto.randomUUID() // a new id per attempt: a retry must not reuse the id of a call that failed
+        const r = await d.exec(n, build, sid ? { ...opts, session: sid, resume: true } : { ...opts, session: fresh })
+        if (!sid) sids.set(n.id, fresh)
+        return r
+      }
       // A retry would start an agent that may already have edited files on top of its own half-done work: only reading blocks are retried.
       const { text: out, img, files: opened, wide, use } = split(await (writes ? exclusive(call) : retry(call, d.stopped)))
       if (TOOL_TEXT.test(out)) throw new Error(t('orchToolText')) // never pass it on as a brief, never cache it as a good answer
@@ -265,7 +309,8 @@ export async function runOrchestra(o: Orch, d: Deps, { msg, force = false, only 
     const prompt = [`# Role\nYou are the lead agent of an orchestra. Your agents have reported back. Write the final answer to the task: merge their findings, say where they disagree, and what is still unknown. Do not brief anyone again.`,
       o.task && `# Task\n${o.task}`, msg && `# Message from the user\n${msg}`, `# Reports\n${sinks.map((n) => `## ${who(n)}\n${clip(outs.get(n.id)!)}`).join('\n\n')}`,
       bad.size > 0 && `# Failed or skipped agents (no report; treat their part as unknown)\n${[...bad].map((id) => who(byId.get(id)!)).join('\n')}`].filter(Boolean).join('\n\n')
-    const fsum = hash(['final', lead.agent, lead.model, lead.effort, prompt].join('\0')), old = prev.get(lead.id)
+    const merger = d.cheap?.(lead) ?? lead
+    const fsum = hash(['final', merger.agent, merger.model, merger.effort, prompt].join('\0')), old = prev.get(lead.id)
     const fin = `${who(lead)} · ${t('orchFinal')}`
     try {
       if (!force && old?.final && old.finalSum === fsum) {
@@ -273,7 +318,9 @@ export async function runOrchestra(o: Orch, d: Deps, { msg, force = false, only 
         addLog({ from: fin, fromId: lead.id, to: t('orchUser'), text: old.final, kind: 'reply' })
       } else {
         patch(lead.id, { state: 'run' })
-        const { text: final, use } = split(await retry(() => d.exec(lead, () => prompt, { tools: '', effort: lead.effort ?? 'low' }), d.stopped))
+        const go = (m: Node) => d.exec(m, () => prompt, { tools: '', effort: m.model?.includes('haiku') ? undefined : m.effort ?? 'low' })
+        // the cheaper writer is unreachable (no gateway, no network): the lead's own model writes it instead of the run ending on "Failed to fetch"
+        const { text: final, use } = split(merger === lead ? await retry(() => go(lead), d.stopped) : await go(merger).catch((e) => { if (d.stopped()) throw e; return retry(() => go(lead), d.stopped) }))
         finalText = final; rows.push({ who: fin, use }); patch(lead.id, { final, finalSum: fsum, state: 'ok' })
         addLog({ from: fin, fromId: lead.id, to: t('orchUser'), text: final, kind: 'reply' })
       }
@@ -283,7 +330,7 @@ export async function runOrchestra(o: Orch, d: Deps, { msg, force = false, only 
   }
   if (rows.length) addLog({ from: '', to: '', text: '', kind: 'usage', rows })
   const sum = rows.reduce((a, r) => ({ cost: a.cost + r.use.cost, tokens: a.tokens + r.use.input + r.use.output }), { cost: 0, tokens: 0 })
-  return { ...sum, failed: [...bad].map((id) => who(byId.get(id)!)), final: finalText }
+  return { ...sum, rows: rows.filter((r) => !r.use.same), failed: [...bad].map((id) => who(byId.get(id)!)), final: finalText }
 }
 
 /** A message to the lead that is only answered: nobody is briefed, and the lead's briefing, cache and final answer stay as they were. */

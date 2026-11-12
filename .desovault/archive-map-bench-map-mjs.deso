@@ -1,0 +1,8 @@
+# archive/map-bench/map.mjs
+?path: archive/map-bench/map.mjs
+?kind: mjs
+?lines: 7
+?generated: scan
+?about: Prints the graph map exactly as the app sends it to the agent (reuses src/deso.ts).
+?doc: Prints the graph map exactly as the app sends it to the agent (reuses src/deso.ts).
+#mjs #archive

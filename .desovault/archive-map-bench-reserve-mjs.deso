@@ -1,0 +1,12 @@
+# archive/map-bench/reserve.mjs
+?path: archive/map-bench/reserve.mjs
+?kind: mjs
+?lines: 110
+?generated: scan
+?about: Where is the chat's remaining reserve? Five ideas, on questions about what the code says (not "which
+?doc: Where is the chat's remaining reserve? Five ideas, on questions about what the code says ( 1 slice    when the best match is sure, send the text of the matching definition instead o 2 stream   time to the first text of the final answer vs the whole answer + the typewriter 3 cache    a second cache point on the conversation                                        4 batch    trim the history in halves instead of one message per turn                      5 cheap    the same questions on Haiku and on Sonnet                                       node --experimental-strip-types --no-warnings archive/map-bench/reserve.mjs <project> <gra Env: MODELS=claude-haiku-5-5,claude-sonnet-5-5  MODES=alone,map,slice  REPS=2  DRY=1 (no L
+?calls: ~src/components/AgentSidebar.tsx(AgentSidebar+useTypewriter), src/deso.ts(MAP_INTRO)
+?symbols: REPS, MODELS, MODES, SYSTEM, MAX_TURNS
+#mjs #archive
+->@src-deso-ts
+->@src-components-agentsidebar-tsx

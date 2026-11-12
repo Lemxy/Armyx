@@ -1,0 +1,11 @@
+# src/deso.test.ts
+?path: src/deso.test.ts
+?kind: ts
+?lines: 143
+?generated: scan
+?calls: ~src-tauri/src/scan.rs(PAY_LIMIT), ~src-tauri/src/worktree.rs(create), src/deso.ts(toMarkdown)
+#ts #src
+->@src-deso-ts
+->@src-sse-ts
+->@src-tauri-src-scan-rs
+->@src-tauri-src-worktree-rs

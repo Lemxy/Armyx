@@ -1,0 +1,9 @@
+# src-tauri/examples/scan.rs
+?path: src-tauri/examples/scan.rs
+?kind: rs
+?lines: 13
+?generated: scan
+?about: `cargo run --example scan -- <project dir> <out dir>`: write the scanned graph as .deso files (used
+?doc: `cargo run --example scan -- <project dir> <out dir>`: write the scanned graph as .deso fi a rescan must not leave notes of deleted files behind
+?symbols: main
+#rs #srctauri

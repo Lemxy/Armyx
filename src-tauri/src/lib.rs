@@ -323,7 +323,11 @@ fn parse_codex(raw: &str) -> Option<Result<Answer, String>> {
 /// system: appended to claude's system prompt (agy has no such flag: it is prepended to the prompt); budget: USD cap per call.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
-async fn run_agent(cli: String, prompt: String, model: Option<String>, effort: Option<String>, session: Option<String>, resume: Option<bool>, tools: Option<String>, system: Option<String>, budget: Option<f64>, max_turns: Option<u32>, worktree: Option<String>) -> Result<Answer, String> {
+async fn run_agent(cli: String, prompt: String, model: Option<String>, effort: Option<String>, session: Option<String>, resume: Option<bool>, tools: Option<String>, system: Option<String>, budget: Option<f64>, max_turns: Option<u32>, worktree: Option<String>, skip_perms: Option<bool>, extra: Option<Vec<String>>) -> Result<Answer, String> {
+    // Per-block settings: skip_perms = false drops the "no permission prompts" flag (the agent can then only do what needs no approval);
+    // extra = the user's own CLI flags, passed as separate arguments (no shell is involved).
+    let skip = skip_perms != Some(false);
+    let extra = extra.unwrap_or_default();
     let cwd = match worktree.filter(|w| !w.is_empty()) { Some(id) => Some(worktree::dir(&root(), &id)?), None => None }; // never silently fall back to the real project
     if cwd.as_ref().is_some_and(|d| !d.is_dir()) { return Err("the isolated worktree is gone: run the orchestra again".into()) }
     let model_opt = model.clone();
@@ -346,7 +350,9 @@ async fn run_agent(cli: String, prompt: String, model: Option<String>, effort: O
             if let Some(n) = max_turns { args.extend(["--max-turns".into(), n.to_string()]) } // stops an agent looping on reads; a hidden flag, absent from --help
             if let Some(id) = session.filter(|s| !s.is_empty()) { args.extend([if resume == Some(true) { "--resume" } else { "--session-id" }.into(), id]) }
             // The user explicitly asked for agents to run with no permission prompts: they can edit files AND run commands unasked.
-            args.extend(["--dangerously-skip-permissions".into(), "-p".into()]);
+            if skip { args.push("--dangerously-skip-permissions".into()) }
+            args.extend(extra);
+            args.push("-p".into());
             Some(prompt)
         }
         "agy" => {
@@ -360,12 +366,16 @@ async fn run_agent(cli: String, prompt: String, model: Option<String>, effort: O
                 temp = Some(f);
                 short
             } else { prompt };
-            args.extend(["--dangerously-skip-permissions".into(), "-p".into(), prompt]);
+            if skip { args.push("--dangerously-skip-permissions".into()) }
+            args.extend(extra);
+            args.extend(["-p".into(), prompt]);
             None
         }
         "codex" => {
             // shortcut: no effort/session flags; Codex uses its own config defaults. Prompt goes through stdin ("-").
-            args = vec!["exec".into(), "--json".into(), "--skip-git-repo-check".into(), "--dangerously-bypass-approvals-and-sandbox".into()];
+            args = vec!["exec".into(), "--json".into(), "--skip-git-repo-check".into()];
+            if skip { args.push("--dangerously-bypass-approvals-and-sandbox".into()) }
+            args.extend(extra);
             if let Some(m) = model_opt.filter(|m| !m.is_empty()) { args.extend(["-m".into(), m]) }
             args.push("-".into());
             Some(match system { Some(s) => format!("{s}\n\n{prompt}"), None => prompt })

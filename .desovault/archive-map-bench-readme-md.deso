@@ -1,0 +1,12 @@
+# archive/map-bench/README.md
+?path: archive/map-bench/README.md
+?kind: md
+?lines: 289
+?generated: scan
+?about: Archive: the project map as a token and accuracy optimizer
+?calls: ~archive/map-bench/gen-monorepo.mjs(handleEvent+processItem), ~src-tauri/src/scan.rs(ARMYX_MAX_NODES+quoted), ~src/components/AgentSidebar.tsx(Assistant), ~src/layout.ts(layout)
+#md #archive
+->@archive-map-bench-gen-monorepo-mjs
+->@src-tauri-src-scan-rs
+->@src-components-agentsidebar-tsx
+->@src-layout-ts

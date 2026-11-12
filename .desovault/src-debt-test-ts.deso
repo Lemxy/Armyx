@@ -1,0 +1,9 @@
+# src/debt.test.ts
+?path: src/debt.test.ts
+?kind: ts
+?lines: 15
+?generated: scan
+?about: @ts-expect-error plain .mjs without types
+?doc: @ts-expect-error plain .mjs without types
+#ts #src
+->@mcp-debt-mjs

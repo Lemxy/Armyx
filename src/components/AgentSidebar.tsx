@@ -1,21 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useDebounced } from '../debounce'
-import { ArrowUp, Check, ChevronDown, Clock, Copy, CornerDownLeft, FolderOpen, Paperclip, Plus, Sparkles, Trash2, X } from 'lucide-react'
+import { ArrowUp, Check, ChevronDown, Clock, Copy, CornerDownLeft, FolderOpen, Paperclip, Plus, Trash2, TriangleAlert, X } from 'lucide-react'
+import { Brand } from '../brands'
 import Segmented from './Segmented'
 import Markdown from './Markdown'
 import { useI18n } from '../i18n'
 import { graphMap, MAP_INTRO, sliceFor, sure, tokens, topHits, trimBatch, type Note } from '../deso'
 import { sse } from '../sse'
 import { mapOpts, recordRead } from '../mapmem'
-import { getKey, setKey } from '../keys'
-import { dsChat } from '../deepseek'
+import { getKey, onKeys } from '../keys'
+import SettingsModal from './SettingsModal'
+import { dsChat, orChat } from '../deepseek'
 import { nanoAgy, nanoImage } from '../nano'
 import { getImg, imgId, putImg } from '../imgs'
 import StoredImg from './StoredImg'
 import { picPath, readPics } from '../pics'
 import { agyModels, agyUsage, claudeUsage, inTauri, openRoot, readSource, runAgent, saveImage } from '../vault'
 
-type Id = 'claude' | 'agy' | 'deepseek' | 'nano'
+type Id = 'claude' | 'agy' | 'deepseek' | 'openrouter' | 'nano'
 type Mode = 'cli' | 'api'
 type Msg = { role: 'user' | 'assistant'; text: string; at: number; error?: boolean; tin?: number; tout?: number; img?: string; imgId?: string; pics?: string[]; via?: string; code?: string } // img = a generated picture; only imgId is saved (src/imgs.ts). pics = ids of pictures you attached. code = the source the question was about (sliceFor), sent with it
 type Chat = { id: string; title: string; msgs: Msg[]; at: number }
@@ -24,18 +26,21 @@ const AGENTS = {
   claude: { label: 'Claude', cli: 'claude', key: 'Anthropic API Key' },
   agy: { label: 'Antigravity', cli: 'agy', key: 'Gemini API Key' },
   deepseek: { label: 'DeepSeek', cli: '', key: 'DeepSeek API Key' }, // API only: no CLI
+  openrouter: { label: 'OpenRouter', cli: '', key: 'OpenRouter API Key' }, // API only: free models (":free")
   nano: { label: 'Nano Banana', cli: '', key: 'Gemini API Key' }, // API only, draws pictures; uses the Gemini key of Antigravity
 } as const
 
 // [id, label]. Every model takes an effort level: Claude via output_config.effort, Gemini via a thinking budget.
 export const MODELS = {
-  claude: [['claude-sonnet-5-5', 'Claude Sonnet 5.5'], ['claude-opus-5-5', 'Claude Opus 5.5'], ['claude-haiku-5-5', 'Claude Haiku 5.5']],
+  claude: [['claude-sonnet-5-5', 'Claude Sonnet 5.5'], ['claude-opus-5-5', 'Claude Opus 5.5'], ['claude-haiku-5-5', 'Claude Haiku 5.5'], ['claude-fable-5-2', 'Claude Fable 5.2']], // Fable 5.2: temporary
   agy: [['gemini-3.8-flash', 'Gemini 3.8 Flash'], ['gemini-3.5-flash-lite', 'Gemini 3.5 Flash-Lite']],
   nano: [['gemini-2.5-flash-image', 'Nano Banana'], ['gemini-3-pro-image-preview', 'Nano Banana Pro']], // image models: the orchestra and the chat
   deepseek: [['deepseek-v4-flash', 'DeepSeek V4 Flash'], ['deepseek-v4-pro', 'DeepSeek V4 Pro'], ['deepseek-chat', 'DeepSeek V3 (chat)'], ['deepseek-reasoner', 'DeepSeek R1 (reasoner)']],
+  // Free on OpenRouter (checked 2026-11-10; the free list changes, "openrouter/free" always picks one that is up). Text only, rate-limited.
+  openrouter: [['openrouter/free', 'Auto (any free model)'], ['nvidia/nemotron-3-ultra-550b-a55b:free', 'Nemotron 3 Ultra (free)'], ['google/gemma-4-31b-it:free', 'Gemma 4 31B (free)'], ['nvidia/nemotron-3.5-lightning:free', 'Nemotron 3.5 Lightning (free)'], ['cohere/north-mini-code:free', 'North Mini Code (free)'], ['thinkingmachines/inkling-2-small:free', 'Inkling 2 Small (free)']],
 } as const
 // Where a simple lookup goes when "cheap model for simple lookups" is on.
-const CHEAP = { claude: MODELS.claude[2][0], agy: MODELS.agy[1][0], deepseek: MODELS.deepseek[0][0] } as const
+const CHEAP = { claude: MODELS.claude[2][0], agy: MODELS.agy[1][0], deepseek: MODELS.deepseek[0][0], openrouter: MODELS.openrouter[0][0] } as const
 // [level, Gemini thinking budget]
 const EFFORTS = [['low', 1024], ['medium', 4096], ['high', 16384], ['max', 32768]] as const
 
@@ -86,6 +91,10 @@ async function callApi(id: Id, key: string, system: string, msgs: Msg[], model: 
     const j = await dsChat(key, { model, messages: [{ role: 'system', content: system }, ...msgs.map((m) => ({ role: m.role, content: full(m) }))] }, onText)
     return j.choices?.[0]?.message?.content ?? ''
   }
+  if (id === 'openrouter') {
+    const j = await orChat(key, { model, messages: [{ role: 'system', content: system }, ...msgs.map((m) => ({ role: m.role, content: full(m) }))] }, onText)
+    return j.choices?.[0]?.message?.content ?? ''
+  }
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`, {
     method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
     body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] },
@@ -111,7 +120,7 @@ const save = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.str
 const CFG = 'desovault.agent'
 type Cfg = { id: Id; models: Record<Id, string>; modes: Record<Id, Mode>; effort: number; auto?: boolean }
 type Row = { title?: string; k: 'usage5h' | 'usage7d'; pct: number; reset: string }
-const DEFAULT: Cfg = { id: 'claude', models: { claude: MODELS.claude[0][0], agy: MODELS.agy[0][0], deepseek: MODELS.deepseek[0][0], nano: MODELS.nano[0][0] }, modes: { claude: inTauri ? 'cli' : 'api', agy: inTauri ? 'cli' : 'api', deepseek: 'api', nano: 'api' }, effort: 1 }
+const DEFAULT: Cfg = { id: 'claude', models: { claude: MODELS.claude[0][0], agy: MODELS.agy[0][0], deepseek: MODELS.deepseek[0][0], openrouter: MODELS.openrouter[0][0], nano: MODELS.nano[0][0] }, modes: { claude: inTauri ? 'cli' : 'api', agy: inTauri ? 'cli' : 'api', deepseek: 'api', openrouter: 'api', nano: 'api' }, effort: 1 }
 const uid = () => Math.random().toString(36).slice(2, 10)
 
 /** Reveals `text` progressively (~4s max) so replies appear typed. */
@@ -127,26 +136,35 @@ function useTypewriter(text: string, on: boolean) {
   return { shown: text.slice(0, n), typing: n < text.length, skip: () => setN(text.length) }
 }
 
-function Assistant({ label, m, fresh, canInsert, onInsert, onInsertImage, onTick }: { label: string; m: Msg; fresh: boolean; canInsert: boolean; onInsert: () => void; onInsertImage: () => void; onTick: () => void }) {
+const kk = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n))
+
+/** One answer: the maker's logo, who answered, the text, and quiet icon buttons (copy, insert) that light up on hover. `live` = still streaming. */
+function Assistant({ agent, label, m, fresh, live, canInsert, onInsert, onInsertImage, onTick }: { agent: string; label: string; m: Msg; fresh: boolean; live?: boolean; canInsert: boolean; onInsert: () => void; onInsertImage: () => void; onTick: () => void }) {
   const { t } = useI18n()
-  const { shown, typing, skip } = useTypewriter(m.text, fresh && !m.error)
+  const { shown, typing, skip } = useTypewriter(m.text, fresh && !m.error && !live)
   const [copied, setCopied] = useState(false)
   useEffect(() => { onTick() }, [shown]) // keep the view pinned to the bottom while typing
+  const btn = 'btn-press p-1.5 rounded-md hover:text-fg hover:bg-panel disabled:opacity-40'
   return (
-    <div className="flex flex-col gap-2 anim-rise" onClick={typing ? skip : undefined}>
-      <span className="flex items-center gap-1.5 text-micro text-accent"><Sparkles size={11} />{label}</span>
-      {m.error ? <p className="text-sm text-status-err whitespace-pre-wrap">{m.text}</p> : <Markdown text={shown} />}
-      {m.img || m.imgId ? <StoredImg src={m.img} id={m.imgId} /> : null}
-      {typing && <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />}
-      {!typing && !m.error && (
-        <div className="flex items-center gap-1 text-micro text-dim">
-          <button onClick={() => { navigator.clipboard.writeText(m.text).catch(console.error); setCopied(true); setTimeout(() => setCopied(false), 1200) }}
-            className="flex items-center gap-1 px-2 py-1 rounded-md hover:text-fg hover:bg-panel">{copied ? <Check size={12} /> : <Copy size={12} />}{t('copy')}</button>
-          <button onClick={onInsert} disabled={!canInsert} className="flex items-center gap-1 px-2 py-1 rounded-md hover:text-fg hover:bg-panel disabled:opacity-40"><CornerDownLeft size={12} />{t('insert')}</button>
-          {(m.img || m.imgId) && <button onClick={onInsertImage} disabled={!canInsert || !inTauri} title={inTauri ? undefined : t('desktopOnly')} className="flex items-center gap-1 px-2 py-1 rounded-md hover:text-fg hover:bg-panel disabled:opacity-40"><CornerDownLeft size={12} />{t('insertImage')}</button>}
-          {m.tin != null && <span className="ml-auto">{m.via && `${m.via} · `}{m.tin} {t('tokIn')} · {m.tout} {t('tokOut')}</span>}
-        </div>
-      )}
+    <div className="group flex gap-3 anim-rise" onClick={typing ? skip : undefined}>
+      <span className="mt-0.5 grid place-items-center w-7 h-7 shrink-0 rounded-full bg-panel border border-line"><Brand agent={agent} size={15} /></span>
+      <div className="min-w-0 flex-1 flex flex-col gap-1.5">
+        <span className="text-micro text-dim truncate">{label}{m.via && ` · ${m.via}`}</span>
+        {m.error ? <div style={{ borderColor: 'color-mix(in srgb, var(--status-err) 40%, transparent)', background: 'color-mix(in srgb, var(--status-err) 10%, transparent)' }} className="flex gap-2 items-start rounded-xl border px-3 py-2 text-xs text-status-err">
+            <TriangleAlert size={14} className="mt-px shrink-0" /><p className="whitespace-pre-wrap break-words min-w-0">{m.text.replace(/^Error: /, '')}</p></div>
+          : m.text ? <Markdown text={shown} />
+          : <span className="flex gap-1 py-1">{[0, 1, 2].map((d) => <span key={d} className="w-1.5 h-1.5 rounded-full bg-accent animate-bounce" style={{ animationDelay: `${d * 0.15}s` }} />)}</span>}
+        {m.img || m.imgId ? <StoredImg src={m.img} id={m.imgId} /> : null}
+        {typing && <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />}
+        {!typing && !live && !m.error && (
+          <div className="flex items-center gap-0.5 -ml-1.5 text-dim opacity-50 group-hover:opacity-100 transition-opacity">
+            <button title={t('copy')} onClick={() => { navigator.clipboard.writeText(m.text).catch(console.error); setCopied(true); setTimeout(() => setCopied(false), 1200) }} className={btn}>{copied ? <Check size={13} /> : <Copy size={13} />}</button>
+            <button title={t('insert')} onClick={onInsert} disabled={!canInsert} className={btn}><CornerDownLeft size={13} /></button>
+            {(m.img || m.imgId) && <button title={inTauri ? t('insertImage') : t('desktopOnly')} onClick={onInsertImage} disabled={!canInsert || !inTauri} className={`${btn} flex items-center gap-1 text-micro`}><CornerDownLeft size={13} />{t('insertImage')}</button>}
+            {m.tin != null && <span title={`${m.tin} ${t('tokIn')} · ${m.tout} ${t('tokOut')}`} className="ml-auto pr-1 text-micro tabular-nums">↑{kk(m.tin)} ↓{kk(m.tout ?? 0)}</span>}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -159,10 +177,12 @@ const ago = (at: number) => {
 export default function AgentSidebar({ notes, note, project, onInsert, onClose }: { notes: Note[]; note?: Note; project: string; onInsert: (t: string) => void; onClose: () => void }) {
   const { t } = useI18n()
   const [cfg, setCfg] = useState<Cfg>(() => ({ ...DEFAULT, ...load<Partial<Cfg>>(CFG, {}) }))
-  const [keys, setKeys] = useState<Record<Id, string>>(() => ({ claude: getKey('claude'), agy: getKey('agy'), deepseek: getKey('deepseek'), nano: getKey('agy') })) // kept in local storage (src/keys.ts)
+  const [keys, setKeys] = useState<Record<Id, string>>(() => ({ claude: getKey('claude'), agy: getKey('agy'), deepseek: getKey('deepseek'), openrouter: getKey('openrouter'), nano: getKey('agy') })) // kept in local storage (src/keys.ts)
+  const [keysOpen, setKeysOpen] = useState(false)
+  useEffect(() => onKeys(() => setKeys({ claude: getKey('claude'), agy: getKey('agy'), deepseek: getKey('deepseek'), openrouter: getKey('openrouter'), nano: getKey('agy') })), [])
   const [chats, setChats] = useState<Chat[]>(() => load<Chat[]>(`desovault.chats.${project}`, []))
   const [activeId, setActiveId] = useState(() => chats[0]?.id ?? '')
-  const [showCfg, setShowCfg] = useState(true) // settings are visible on entry
+  const [showCfg, setShowCfg] = useState(false) // the model picker opens from the chip above the message box
   const [plans, setPlans] = useState<Partial<Record<Id, Row[]>>>({})
   const [planErr, setPlanErr] = useState<Partial<Record<Id, string>>>({})
   const lastClaude = useRef(0)
@@ -178,7 +198,7 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
   useEffect(() => { save(`desovault.chats.${project}`, chats.map((c) => ({ ...c, msgs: c.msgs.map(({ img, ...m }) => m) }))) }, [chats, project]) // pictures are too big for localStorage: they live in the image store
 
   const { id, modes, effort } = cfg
-  const apiOnly = id === 'deepseek' || id === 'nano'
+  const apiOnly = id === 'deepseek' || id === 'openrouter' || id === 'nano'
   const a = AGENTS[id], mode: Mode = apiOnly ? 'api' : modes[id], key = keys[id]
   const [agyList, setAgyList] = useState<[string, string][]>([])
   useEffect(() => { if (inTauri) agyModels().then(setAgyList).catch(console.error) }, [])
@@ -224,7 +244,7 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
     const useModel = easy ? CHEAP[id as keyof typeof CHEAP] : model, level = EFFORTS[easy ? 0 : effort][0]
     try {
       if (!real) throw new Error(status)
-      if (id === 'deepseek' && user.pics) throw new Error(t('noImagesDs'))
+      if ((id === 'deepseek' || id === 'openrouter') && user.pics) throw new Error(t('noImagesDs'))
       // the newest 4 pictures of the conversation go along: as data for the APIs, as files on disk for the CLIs
       const pics = new Map<string, string>(), paths = new Map<string, string>()
       for (const i of history.flatMap((m) => m.pics ?? []).slice(-4)) {
@@ -297,7 +317,6 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
     const rows = plans[id]
     return (
       <div className="flex flex-col gap-2.5 pt-1">
-        <span className={label}>{t('usage')}</span>
         {rows?.length ? rows.map((w, i) => (
           <div key={i} className="flex flex-col gap-1">
             {w.title && w.title !== rows[i - 1]?.title && <span className="text-micro text-fg pt-1">{w.title}</span>}
@@ -317,7 +336,8 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
     <aside className="anim-slide w-[26rem] shrink-0 border-l border-line bg-surface flex flex-col text-sm relative">
       <div className="flex items-center gap-1 px-4 h-14 border-b border-line">
         <span className="font-serif text-lg font-semibold truncate">{chat?.title ?? t('chatNew')}</span>
-        <span className="ml-auto flex items-center gap-1.5 text-micro text-dim mr-1 shrink-0"><span className={`w-1.5 h-1.5 rounded-full ${real ? 'bg-status-ok' : 'bg-accent'}`} />{status}</span>
+        <span className="ml-auto" />
+        <button onClick={() => openRoot().catch(console.error)} title={t('openFolder')} className={icon}><FolderOpen size={15} /></button>
         <button onClick={newChat} title={t('chatNew')} className={icon}><Plus size={15} /></button>
         <button onClick={() => setShowHist((v) => !v)} title={t('history')} className={`${icon} ${showHist ? 'bg-panel text-fg' : ''}`}><Clock size={15} /></button>
         <button onClick={onClose} title={t('close')} className={icon}><X size={15} /></button>
@@ -339,52 +359,62 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
         </div>
       )}
 
-      <button onClick={() => setShowCfg((v) => !v)} className="flex items-center gap-2 px-5 py-2.5 border-b border-line text-micro text-dim hover:text-fg text-left">
-        <span className="truncate">{a.label} · {mode === 'cli' ? t('modeCli') : t('modeApi')} · {list.find((m) => m[0] === model)?.[1]}{effortName}</span>
-        <ChevronDown size={13} data-ease className={`ml-auto shrink-0 ${showCfg ? 'rotate-180' : ''}`} />
-      </button>
-      {showCfg && (
-        <div className="anim-rise px-5 pt-3 pb-5 flex flex-col gap-3.5 border-b border-line">
-          <div className="flex flex-col gap-1.5"><span className={label}>Agent</span><Segmented<Id> value={id} onChange={(k) => set({ id: k })} options={(Object.keys(AGENTS) as Id[]).map((k) => [k, AGENTS[k].label] as const)} /></div>
-          {!apiOnly && <div className="flex flex-col gap-1.5"><span className={label}>Mode</span><Segmented<Mode> value={mode} onChange={(m) => set({ modes: { ...modes, [id]: m } })} options={[['cli', t('modeCli')], ['api', t('modeApi')]]} /></div>}
-          {mode === 'api' && <input type="password" value={key} onChange={(e) => { const v = e.target.value, shared = id === 'agy' || id === 'nano'; setKey(id === 'nano' ? 'agy' : id, v); setKeys((s) => ({ ...s, [id]: v, ...(shared && { agy: v, nano: v }) })) }} placeholder={a.key}
-            className="px-3.5 py-2 rounded-xl bg-field border border-line focus:border-accent outline-none text-sm placeholder:text-dim" />}
-          <label className="flex flex-col gap-1.5"><span className={label}>{t('model')}</span>
-            <select value={model} onChange={(e) => set({ models: { ...cfg.models, [id]: e.target.value } })}
-              className="px-3.5 py-2 rounded-xl bg-field border border-line focus:border-accent outline-none text-sm text-fg">
-              {list.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-            </select>
-          </label>
-          {!apiOnly && <div className="flex flex-col gap-1.5">
-            <span className={label}>{t('reasoning')}</span>
-            {effortFixed
-              ? <p className="px-3.5 py-2.5 rounded-xl bg-field border border-line text-micro leading-relaxed text-dim">{t('effortInName')}</p>
-              : <Segmented value={String(effort)} onChange={(v) => set({ effort: +v })} options={EFFORTS.map(([k], i) => [String(i), t(k)] as const)} />}
-          </div>}
-          {routable && <label title={t('autoRouteTip')} className="flex items-center gap-2 text-xs text-dim hover:text-fg cursor-pointer"><input type="checkbox" checked={!!cfg.auto} onChange={(e) => set({ auto: e.target.checked })} />{t('autoRoute')}</label>}
-          {!apiOnly && <Limits />}
-          <button onClick={() => openRoot().catch(console.error)} className="flex items-center gap-2 text-xs text-dim hover:text-fg self-start"><FolderOpen size={14} />{t('openFolder')}</button>
-        </div>
-      )}
-
       <div className="flex-1 overflow-auto px-5 pt-5 pb-3 flex flex-col gap-6">
         {msgs.length === 0 && (
-          <p className="m-auto text-center text-dim max-w-[17rem] leading-relaxed">{t('chatEmpty', { n: notes.length, k: tokens(map) })}</p>
-        )}
+          <div className="m-auto flex flex-col items-center gap-4 text-center max-w-[19rem]">
+            <span className="grid place-items-center w-14 h-14 rounded-2xl bg-panel border border-line"><Brand agent={id} size={28} /></span>
+            <div className="flex flex-col gap-1.5">
+              <p className="font-serif text-lg font-semibold">{t('chatHello')}</p>
+              <p className="text-xs text-dim leading-relaxed">{t('chatEmpty', { n: notes.length, k: tokens(map) })}</p>
+            </div>
+            <div className="flex flex-col gap-1.5 w-full">
+              {(['sugSummary', 'sugLinks', 'sugIdeas'] as const).map((s) => <button key={s} onClick={() => setPrompt(t(s))} className="btn-press px-3.5 py-2 rounded-xl border border-line text-xs text-mut hover:text-fg hover:border-accent text-left">{t(s)}</button>)}
+            </div>
+          </div>)}
         {msgs.map((m, i) => m.role === 'user'
           ? <div key={m.at} className="anim-rise self-end max-w-[85%] flex flex-col items-end gap-1">
             {m.pics && <div className="flex flex-wrap justify-end gap-1.5">{m.pics.map((i) => <StoredImg key={i} id={i} plain cls="max-h-28 rounded-lg border border-line" />)}</div>}
-            <p className="whitespace-pre-wrap px-4 py-2.5 rounded-2xl rounded-br-md bg-panel border border-line">{m.text}</p>
+            <p className="whitespace-pre-wrap break-words px-4 py-2.5 rounded-2xl rounded-br-md bg-accent text-bg">{m.text}</p>
             <span className="text-micro text-dim">{new Date(m.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
           </div>
-          : <Assistant key={m.at} label={a.label} m={m} fresh={m.at === freshAt && i === msgs.length - 1} canInsert={!!note} onTick={scroll} onInsert={() => onInsert(m.text)} onInsertImage={() => insertImage(m)} />)}
-        {busy && (live
-          ? <div className="flex flex-col gap-2"><span className="flex items-center gap-1.5 text-micro text-accent"><Sparkles size={11} />{a.label}</span><Markdown text={live} /></div>
-          : <span className="anim-fade text-micro text-dim animate-pulse">{t('thinking')}</span>)}
+          : <Assistant key={m.at} agent={id} label={a.label} m={m} fresh={m.at === freshAt && i === msgs.length - 1} canInsert={!!note} onTick={scroll} onInsert={() => onInsert(m.text)} onInsertImage={() => insertImage(m)} />)}
+        {busy && <Assistant agent={id} label={a.label} live m={{ role: 'assistant', text: live, at: 0 }} fresh={false} canInsert={false} onTick={scroll} onInsert={() => {}} onInsertImage={() => {}} />}
         <div ref={end} />
       </div>
 
-      <div className="px-4 pt-3 pb-3">
+      <div className="px-4 pt-2 pb-3 relative">
+        {!real && <div className="mb-2 flex items-center gap-2 px-3 py-2 rounded-xl text-xs border border-line bg-panel">
+          <TriangleAlert size={13} className="text-accent shrink-0" /><span className="flex-1 min-w-0">{status}</span>
+          {mode === 'api' && <button onClick={() => setKeysOpen(true)} className="shrink-0 text-accent hover:underline">{t('gotoKeys')}</button>}</div>}
+        {showCfg && <>
+          <div className="fixed inset-0 z-10" onMouseDown={() => setShowCfg(false)} />
+          <div className="anim-rise absolute left-3 right-3 bottom-full mb-1 z-20 max-h-[75vh] overflow-auto rounded-2xl bg-surface border border-line shadow-float p-3 flex flex-col gap-3">
+            <div className="grid grid-cols-5 gap-1.5">
+              {(Object.keys(AGENTS) as Id[]).map((k) => (
+                <button key={k} onClick={() => set({ id: k })} title={AGENTS[k].label}
+                  className={`btn-press flex flex-col items-center gap-1 py-2 rounded-xl border text-micro ${k === id ? 'border-accent bg-accent-dim text-fg' : 'border-line text-dim hover:text-fg'}`}>
+                  <Brand agent={k} size={18} /><span className="max-w-full truncate px-0.5">{AGENTS[k].label}</span></button>))}
+            </div>
+            <div className="flex flex-col gap-0.5">
+              {list.map(([v, l]) => (
+                <button key={v} onClick={() => set({ models: { ...cfg.models, [id]: v } })}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-left ${v === model ? 'bg-accent-dim text-fg' : 'text-mut hover:bg-panel'}`}>
+                  <span className="flex-1 truncate">{l}</span>{v === model && <Check size={13} className="text-accent shrink-0" />}</button>))}
+            </div>
+            {(!apiOnly || routable) && <div className="flex flex-col gap-3 pt-3 border-t border-line">
+              {!apiOnly && <div className="flex flex-col gap-1.5"><span className={label}>Mode</span><Segmented<Mode> value={mode} onChange={(m) => set({ modes: { ...modes, [id]: m } })} options={[['cli', t('modeCli')], ['api', t('modeApi')]]} /></div>}
+              {!apiOnly && <div className="flex flex-col gap-1.5">
+                <span className={label}>{t('reasoning')}</span>
+                {effortFixed
+                  ? <p className="px-3.5 py-2.5 rounded-xl bg-field border border-line text-micro leading-relaxed text-dim">{t('effortInName')}</p>
+                  : <Segmented value={String(effort)} onChange={(v) => set({ effort: +v })} options={EFFORTS.map(([k], i) => [String(i), t(k)] as const)} />}
+              </div>}
+              {routable && <label title={t('autoRouteTip')} className="flex items-center gap-2 text-xs text-dim hover:text-fg cursor-pointer"><input type="checkbox" checked={!!cfg.auto} onChange={(e) => set({ auto: e.target.checked })} />{t('autoRoute')}</label>}
+              {!apiOnly && <details className="text-xs"><summary className="cursor-pointer text-dim hover:text-fg">{t('usage')}</summary><Limits /></details>}
+            </div>}
+            {mode === 'api' && <button onClick={() => { setShowCfg(false); setKeysOpen(true) }} className={`text-xs text-left hover:text-fg ${key ? 'text-dim' : 'text-accent'}`}>{key ? '✓ ' : ''}{t('gotoKeys')}</button>}
+          </div>
+        </>}
         {pending.length > 0 && <div className="flex flex-wrap gap-1.5 pb-2">{pending.map((p) => (
           <span key={p.id} className="relative"><img src={p.data} className="h-12 w-12 object-cover rounded-lg border border-line" />
             <button onClick={() => setPending((l) => l.filter((x) => x.id !== p.id))} className="absolute -top-1 -right-1 p-0.5 rounded-full bg-surface border border-line text-dim hover:text-status-err"><X size={10} /></button></span>))}</div>}
@@ -392,14 +422,20 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
           <label title={t('attachImage')} className="btn-press p-1.5 rounded-lg text-dim hover:text-accent cursor-pointer self-center"><Paperclip size={15} />
             <input type="file" accept="image/*" multiple hidden onChange={(e) => { addFiles([...(e.target.files ?? [])]); e.target.value = '' }} /></label>
           <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={2} spellCheck={false} placeholder={t('promptPh')}
-            onPaste={(e) => { const f = [...e.clipboardData.files].filter((x) => x.type.startsWith('image/')); if (f.length) { e.preventDefault(); addFiles(f) } }}
+            onPaste={(e) => { const cd = e.clipboardData; let f = [...cd.items].filter((i) => i.kind === 'file' && i.type.startsWith('image/')).map((i) => i.getAsFile()).filter((x): x is File => !!x); if (!f.length) f = [...cd.files].filter((x) => x.type.startsWith('image/')); if (f.length) { e.preventDefault(); addFiles(f) } }}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
             className="flex-1 min-w-0 py-1 bg-transparent outline-none resize-none text-sm placeholder:text-dim max-h-40" />
           <button onClick={send} disabled={busy || !prompt.trim()} title={t('send')}
             className="btn-press p-2 rounded-full bg-accent text-bg hover:opacity-90 disabled:opacity-25"><ArrowUp size={15} /></button>
         </div>
-        <p className="mt-2 px-1 text-micro text-dim">{t('sendHint')}</p>
+        <div className="relative z-20 mt-2 flex items-center gap-2 px-1">
+          <button onClick={() => setShowCfg((v) => !v)} title={status} className={`btn-press flex items-center gap-1.5 pl-2 pr-2 py-1 rounded-full border text-xs max-w-[65%] ${showCfg ? 'border-accent bg-accent-dim' : 'border-line hover:border-accent'}`}>
+            <Brand agent={id} size={14} /><span className="truncate">{list.find((m) => m[0] === model)?.[1]}{effortName}</span>
+            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${real ? 'bg-status-ok' : 'bg-accent'}`} /><ChevronDown size={12} data-ease className={`shrink-0 ${showCfg ? 'rotate-180' : ''}`} /></button>
+          <span title={t('sendHint')} className="ml-auto truncate text-micro text-dim">{t('sendHint')}</span>
+        </div>
       </div>
+      {keysOpen && <SettingsModal tab="api" onClose={() => setKeysOpen(false)} />}
     </aside>
   )
 }

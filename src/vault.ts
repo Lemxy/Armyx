@@ -74,7 +74,7 @@ export async function deleteNote(name: string, rest: Note[]) {
 }
 
 export type Answer = { text: string; input: number; cached: number; output: number; cost: number; files?: string[]; wide?: boolean } // files = project files the agent opened (claude only); wide = it also searched, wrote or ran commands
-export type AgentOpts = { session?: string; resume?: boolean; tools?: string; system?: string; budget?: number; maxTurns?: number; worktree?: string }
+export type AgentOpts = { session?: string; resume?: boolean; tools?: string; system?: string; budget?: number; maxTurns?: number; worktree?: string; skipPerms?: boolean; extra?: string[] }
 export const runAgent = (cli: string, prompt: string, model: string, effort: string, opts: AgentOpts = {}) => call<Answer>('run_agent', { cli, prompt, model, effort, ...opts })
 // Isolated runs: agents work in a git worktree (id = the orchestra id) until you apply or discard what they changed.
 export const worktreeStamp = (worktree?: string) => call<string>('project_stamp', { worktree })

@@ -1,0 +1,12 @@
+# src-tauri/src/worktree.rs
+?path: src-tauri/src/worktree.rs
+?kind: rs
+?lines: 119
+?generated: scan
+?about: Sandbox for an orchestra run: a git worktree on its own branch, next to the project (`<parent>/.army
+?doc: Sandbox for an orchestra run: a git worktree on its own branch, next to the project (`<par Agents work there with no permission prompts; the project is untouched until `apply` (a pa shortcut: one worktree per orchestra, so parallel agents share it; it starts from HEAD, so Creates the worktree (or reuses the existing one) and returns its folder. Fails if the pro What the agents changed so far: a file summary and the patch. A fingerprint of the code the agents see (HEAD, changes to tracked files, names of untrack after the code changed. Empty outside git. shortcut: an edit inside an already untracked f Applies the agents' changes to the project's working tree (not committed), then removes th Returns false when they changed nothing. On a conflict the project is left as it was and t
+?callers: src-tauri/src/lib.rs, ~src-tauri/src/scan.rs, ~src/App.tsx, ~src/components/Orchestra.tsx, ~src/components/ProjectModal.tsx, ~src/deso.test.ts, ~src/i18n.ts, ~src/vault.ts
+?exports: dir, create, diff, stamp, discard, apply
+?symbols: check, create, diff, stamp, discard, apply, isolate_review_apply_and_discard
+?spans: create:27-34, diff:37-42, stamp:46-51, discard:53-60, apply:64-71, isolate_review_apply_and_discard:80-94
+#rs #srctauri

@@ -1,0 +1,9 @@
+# archive/map-bench/describe.mjs
+?path: archive/map-bench/describe.mjs
+?kind: mjs
+?lines: 48
+?generated: scan
+?about: Enriches a scanned graph with what a cheap model can say about each file, once, cached by file hash:
+?doc: Enriches a scanned graph with what a cheap model can say about each file, once, cached by  ?about:    one line, only when the file has no comment to take it from ?keywords: synonyms and user-level words ("email, mail, smtp, reset code") so a question p node bench/describe.mjs <project> <graph dir> [model]
+?symbols: VERSION
+#mjs #archive

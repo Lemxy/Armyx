@@ -1,0 +1,12 @@
+# src/pics.ts
+?path: src/pics.ts
+?kind: ts
+?lines: 27
+?generated: scan
+?about: Pictures you attach for an agent. Stored in the image store (src/imgs.ts); the CLIs get them as file
+?doc: Pictures you attach for an agent. Stored in the image store (src/imgs.ts); the CLIs get th
+?exports: readPic, readPics, picPath, picNote
+?symbols: readPic, picPath
+#ts #src
+->@src-imgs-ts
+->@src-vault-ts

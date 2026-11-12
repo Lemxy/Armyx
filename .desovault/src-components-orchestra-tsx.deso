@@ -1,0 +1,32 @@
+# src/components/Orchestra.tsx
+?path: src/components/Orchestra.tsx
+?kind: tsx
+?lines: 872
+?generated: scan
+?doc: images in a paste: clipboard items first, files as the fallback Recommended model per role, shown first in every model picker. agy takes its effort from t think = Claude effort the block gets from this preset; tools = the only tools it may use ( Roles, picked with the + next to the model: the text fills the block's context (editable), A reviewer sends its work back to the blocks feeding it, up to `review` times, until it an Ready-made orchestras (the blocks are filled from the roles above) and your own, saved fro shortcut: the pipeline lives in one fixed folder on this machine; make it a setting when s Request -> turnaround sheet -> mesh -> checked GLB. The steps themselves live in the proje
+?calls: src/orchestra.ts(BUDGET+LOG_MAX+READ_ONLY), ~src-tauri/src/worktree.rs(create+discard), src/components/AgentSidebar.tsx(AgentSidebar+Assistant), src/nano.ts(nanoAgy+nanoImage), src/style.ts(SHEET_PROMPT+STYLE_PROMPT), ~src-tauri/src/scan.rs(resolve), src/brands.tsx(Brand), src/components/ContextMenu.tsx(ContextMenu)
+?callers: ~src/deso.ts, ~src/i18n.ts, ~src/welcome.ts
+?exports: Orchestra
+?symbols: DEEPSEEK, OPENROUTER, HAIKU, EFFORTS, NANO, CODEX, NAMES, PRESETS, ROLES, UNITY, RUNS_KEPT, SLOW, GRID, Orchestra, MiniMap, CliSettings, Elapsed, FINAL_BG, Avatar, Fold, Dialogue, UsageTable
+?spans: Orchestra:168-349, MiniMap:649-664, CliSettings:667-693, Elapsed:696-701, Avatar:713-718, Fold:721-730, Dialogue:733-847, UsageTable:850-872
+#tsx #src
+->@src-debounce-ts
+->@src-i18n-ts
+->@src-brands-tsx
+->@src-vault-ts
+->@src-components-markdown-tsx
+->@src-components-storedimg-tsx
+->@src-components-agentsidebar-tsx
+->@src-style-ts
+->@src-deso-ts
+->@src-mapmem-ts
+->@src-components-contextmenu-tsx
+->@src-keys-ts
+->@src-deepseek-ts
+->@src-dsprice-ts
+->@src-nano-ts
+->@src-imgs-ts
+->@src-pics-ts
+->@src-orchestra-ts
+->@src-tauri-src-worktree-rs
+->@src-tauri-src-scan-rs

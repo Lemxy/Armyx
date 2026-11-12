@@ -1,0 +1,10 @@
+# archive/map-bench/paraphrase.mjs
+?path: archive/map-bench/paraphrase.mjs
+?kind: mjs
+?lines: 32
+?generated: scan
+?about: Makes generated questions (bench/genq.mjs) harder for grep: the quoted docstring is rewritten by a m
+?doc: Makes generated questions (bench/genq.mjs) harder for grep: the quoted docstring is rewrit but shares no word of 5+ letters with the original and none of the item's name. Questions  node bench/paraphrase.mjs <questions.json> > paraphrased.json
+?calls: ~src-tauri/src/scan.rs(quoted)
+#mjs #archive
+->@src-tauri-src-scan-rs

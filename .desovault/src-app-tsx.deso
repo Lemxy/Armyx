@@ -1,0 +1,28 @@
+# src/App.tsx
+?path: src/App.tsx
+?kind: tsx
+?lines: 188
+?generated: scan
+?doc: Pending debounced saves, one per note, so edits to different notes never cancel each other The graph follows the code: a watcher in the backend re-scans after files change; generate Native feel: no browser context menu anywhere; Ctrl/Cmd+J toggles the agent panel. Whole-project token stats are heavy on a big scan: compute them off the typing path, and o
+?calls: src/vault.ts(deleteNote+loadNotes+saveNote), src/components/SourceEditor.tsx(FileSplit+SourceEditor), ~src-tauri/src/worktree.rs(create), src/components/AgentSidebar.tsx(AgentSidebar), src/components/CircuitGraph.tsx(CircuitGraph), src/components/ContextMenu.tsx(ContextMenu), src/components/Editor.tsx(Editor), src/components/Modal.tsx(Modal)
+?exports: App
+?symbols: TABS, FirstNote
+?spans: FirstNote:173-188
+#tsx #src
+->@src-debounce-ts
+->@src-deso-ts
+->@src-vault-ts
+->@src-i18n-ts
+->@src-components-settingsmodal-tsx
+->@src-components-projectmodal-tsx
+->@src-components-sidebar-tsx
+->@src-components-editor-tsx
+->@src-components-sourceeditor-tsx
+->@src-components-circuitgraph-tsx
+->@src-components-tokeninspector-tsx
+->@src-components-contextmenu-tsx
+->@src-components-orchestra-tsx
+->@src-components-agentsidebar-tsx
+->@src-components-modal-tsx
+->@src-components-segmented-tsx
+->@src-tauri-src-worktree-rs

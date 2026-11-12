@@ -1,0 +1,12 @@
+# src/components/TokenInspector.tsx
+?path: src/components/TokenInspector.tsx
+?kind: tsx
+?lines: 59
+?generated: scan
+?about: Share of the source that the agent does not have to read: 1 − map/source, never shown as a flat 100.
+?calls: src/deso.ts(toMarkdown), src/i18n.ts(useI18n)
+?exports: TokenInspector
+?symbols: TokenInspector
+#tsx #src
+->@src-deso-ts
+->@src-i18n-ts

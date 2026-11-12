@@ -1,0 +1,17 @@
+# src/components/CircuitGraph.tsx
+?path: src/components/CircuitGraph.tsx
+?kind: tsx
+?lines: 373
+?generated: scan
+?doc: ---- motion: camera and nodes ease toward their targets, one rAF loop for both ---- new targets after every render (layout, hide/show, drag); new notes appear in place, exist each neighbour of the focused note gets its own colour (its mark if it has one), shared by first frame: start slightly zoomed out so the graph settles in non-passive wheel listener so zoom can preventDefault; zoom eases toward the target around dragging a selected note moves the whole selection highlighted edges last, so they draw on top
+?calls: src/layout.ts(communities+layout), src/components/ContextMenu.tsx(ContextMenu), src/i18n.ts(useI18n), ~src/vault.ts(deleteNote)
+?callers: src/App.tsx
+?exports: CircuitGraph
+?symbols: PALETTE, NAMES, AUTO, CircuitGraph
+?spans: CircuitGraph:29-373
+#tsx #src
+->@src-deso-ts
+->@src-i18n-ts
+->@src-components-contextmenu-tsx
+->@src-layout-ts
+->@src-vault-ts

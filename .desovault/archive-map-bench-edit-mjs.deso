@@ -1,0 +1,11 @@
+# archive/map-bench/edit.mjs
+?path: archive/map-bench/edit.mjs
+?kind: mjs
+?lines: 117
+?generated: scan
+?about: Bug-fix benchmark: for each task a bug is injected into a throw-away copy of the project, the agent
+?doc: Bug-fix benchmark: for each task a bug is injected into a throw-away copy of the project,  symptom (no file, no function name) and the Read/Grep/Glob/Edit tools, and the project's o Modes as in bench.mjs: alone / map-v3 (static map + best matches for the symptom) / map-v4 node --experimental-strip-types bench/edit.mjs <pristine project> <graph dir> bench/edit-t Env: MODES=alone,map-v3  REPS=2  JOBS=3.  The project's node_modules (if any) is linked in hypothesis: agents narrate and re-plan between tool calls; one line of instruction might c project search taken away (Edit stays): the agent works from the map, the best matches wit node_modules folders (real or already linked) up to three levels deep: they are linked int
+?calls: ~src/deso.ts(MAP_INTRO)
+?symbols: REPS, TASK, TERSE, MODES, CARGO_TARGET_DIR, TRACE, readdirSyncAll, JOBS
+#mjs #archive
+->@src-deso-ts

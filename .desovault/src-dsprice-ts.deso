@@ -1,0 +1,13 @@
+# src/dsprice.ts
+?path: src/dsprice.ts
+?kind: ts
+?lines: 17
+?generated: scan
+?about: DeepSeek price per 1M tokens (USD) for the models in MODELS.deepseek (AgentSidebar). Pure, so the or
+?doc: DeepSeek price per 1M tokens (USD) for the models in MODELS.deepseek (AgentSidebar). Pure, Source: https://api-docs.deepseek.com/quick_start/pricing (checked 2026-11-08). The page h so the run cap errs on the safe side. deepseek-v4-flash is a legacy alias billed at the Fl shortcut: deepseek-chat and deepseek-reasoner are not on the current price page, so their
+?calls: ~src/components/AgentSidebar.tsx(AgentSidebar)
+?callers: src/orchestra.test.ts
+?exports: dsUsage
+?symbols: PRICE, dsUsage
+#ts #src
+->@src-components-agentsidebar-tsx

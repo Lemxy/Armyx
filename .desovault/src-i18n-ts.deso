@@ -1,0 +1,16 @@
+# src/i18n.ts
+?path: src/i18n.ts
+?kind: ts
+?lines: 124
+?generated: scan
+?calls: ~src-tauri/src/worktree.rs(create), ~src/components/Editor.tsx(Editor), ~src/components/Orchestra.tsx(Orchestra), ~src/layout.ts(communities), ~src/vault.ts(deleteNote)
+?callers: src/components/CircuitGraph.tsx, src/components/Modal.tsx, src/components/ProjectModal.tsx, src/components/SettingsModal.tsx, src/components/Sidebar.tsx, src/components/SourceEditor.tsx, src/components/TokenInspector.tsx
+?exports: Lang, Key, isSmooth, useI18n
+?symbols: useI18n
+?spans: useI18n:119-124
+#ts #src
+->@src-tauri-src-worktree-rs
+->@src-components-editor-tsx
+->@src-components-orchestra-tsx
+->@src-layout-ts
+->@src-vault-ts

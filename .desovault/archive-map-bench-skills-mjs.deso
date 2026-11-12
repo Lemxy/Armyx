@@ -1,0 +1,9 @@
+# archive/map-bench/skills.mjs
+?path: archive/map-bench/skills.mjs
+?kind: mjs
+?lines: 85
+?generated: scan
+?about: Skill-routing benchmark: does the graph hint replace the always-loaded skill list? Real `claude -p`
+?doc: Skill-routing benchmark: does the graph hint replace the always-loaded skill list? Real `c base   your Claude Code as is (all skills, all MCP servers and plugins) nomcp  same, MCP servers off          -> what the MCP servers cost v5     MCP off + skills off + mcp/claude-hook.mjs adds the best-matching skill files to th Each prompt asks which skill applies; `none` is the right answer when no skill fits. node --experimental-strip-types bench/skills.mjs [model] [out.json]      Env: REPS=1 MODES
+?symbols: REPS, MODES
+#mjs #archive

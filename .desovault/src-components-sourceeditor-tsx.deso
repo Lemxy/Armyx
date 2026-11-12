@@ -1,0 +1,20 @@
+# src/components/SourceEditor.tsx
+?path: src/components/SourceEditor.tsx
+?kind: tsx
+?lines: 82
+?generated: scan
+?about: The project file a scanned note stands for: it is opened for editing here, never launched. Saved on
+?doc: shortcut: plain text, no syntax colours; add a highlighter if this becomes the main editor
+?calls: ~src-tauri/src/lib.rs(opened), ~src-tauri/src/scan.rs(resolve), src/components/Editor.tsx(Editor), src/components/Segmented.tsx(Segmented), src/i18n.ts(useI18n)
+?callers: src/App.tsx
+?exports: FileSplit
+?symbols: VIEW, SourceEditor, FileSplit
+?spans: SourceEditor:13-62, FileSplit:65-82
+#tsx #src
+->@src-deso-ts
+->@src-i18n-ts
+->@src-vault-ts
+->@src-components-editor-tsx
+->@src-components-segmented-tsx
+->@src-tauri-src-lib-rs
+->@src-tauri-src-scan-rs

@@ -1,0 +1,14 @@
+# src/components/Editor.tsx
+?path: src/components/Editor.tsx
+?kind: tsx
+?lines: 100
+?generated: scan
+?doc: No wrapping, so one logical line is one visual line and the gutter numbers stay aligned. Caret pixel position: a hidden mirror with identical layout, measured at the @.
+?calls: ~src/layout.ts(layout)
+?callers: src/App.tsx, src/components/SourceEditor.tsx, ~src/i18n.ts
+?exports: Editor
+?symbols: highlight, Editor
+?spans: highlight:6-21, Editor:28-100
+#tsx #src
+->@src-deso-ts
+->@src-layout-ts

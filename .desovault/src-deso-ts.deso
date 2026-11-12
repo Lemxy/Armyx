@@ -1,0 +1,17 @@
+# src/deso.ts
+?path: src/deso.ts
+?kind: ts
+?lines: 330
+?generated: scan
+?about: Heuristic BPE-like estimate (not an exact tokenizer): letter runs ~5 chars/token, digits 3/token, pu
+?doc: Heuristic BPE-like estimate (not an exact tokenizer): letter runs ~5 chars/token, digits 3 Mirrored in src-tauri/src/lib.rs `count_tokens`. camelCase / snake_case / kebab-case / paths all become plain lowercase terms; a light stem words in a question that name a file type, and file types that are rarely the answer to "w exact term, or (for words of 4+ letters) a substring of the squashed text: "email" finds " for the best few: which files this one uses (symbols it takes from them) and which files u to its cause without searching the project. Links named in the source come first; a `~` ma A file agents keep opening earns a full line. Whole steps only (1, 3, 7, 15 opens), so the the three files closest to the question also say where their definitions are, so the agent
+?calls: ~src-tauri/src/lib.rs(opened+parse_answer), ~src/components/AgentSidebar.tsx(callApi), ~src/components/Markdown.tsx(Markdown), ~src/components/Orchestra.tsx(Orchestra)
+?callers: archive/map-bench/reserve.mjs, src/components/TokenInspector.tsx, src/deso.test.ts, src/orchestra.ts, ~archive/map-bench/RESULTS-v5.md, ~archive/map-bench/RESULTS-v5.ru.md, ~archive/map-bench/bench.mjs, ~archive/map-bench/edit.mjs
+?exports: Note, links, tags, title, tokens, Kind, Breakdown, toMarkdown
+?symbols: LINK, toMarkdown, MAP_INTRO, MAP_BUDGET, DOC_W, FIELDS, KINDS, MINOR, MAP_LINKS, DIVERSE, SURE, CODE_NAME, SMALL_PROJECT, SCHEMA
+?spans: tokens:12-16, toMarkdown:22-53, MAP_INTRO:63-67, topHits:138-146, diverse:153-163, scoredHits:166-171, mapIds:179-184, graphMap:196-235, sliceFor:252-276, trimBatch:282-288, subMap:295-304, outline:307-311
+#ts #src
+->@src-tauri-src-lib-rs
+->@src-components-agentsidebar-tsx
+->@src-components-markdown-tsx
+->@src-components-orchestra-tsx

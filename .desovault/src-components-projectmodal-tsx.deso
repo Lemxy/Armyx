@@ -1,0 +1,14 @@
+# src/components/ProjectModal.tsx
+?path: src/components/ProjectModal.tsx
+?kind: tsx
+?lines: 68
+?generated: scan
+?calls: src/vault.ts(newProjectId+pickFolder+removeProject), ~src-tauri/src/worktree.rs(create), src/components/Modal.tsx(Modal), src/i18n.ts(useI18n)
+?exports: ProjectModal
+?symbols: ProjectModal
+?spans: ProjectModal:9-68
+#tsx #src
+->@src-i18n-ts
+->@src-vault-ts
+->@src-components-modal-tsx
+->@src-tauri-src-worktree-rs

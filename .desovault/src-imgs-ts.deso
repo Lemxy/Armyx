@@ -1,0 +1,9 @@
+# src/imgs.ts
+?path: src/imgs.ts
+?kind: ts
+?lines: 16
+?generated: scan
+?about: Generated pictures are too big for localStorage (a few fill it), so chats keep only an id and the pi
+?doc: Generated pictures are too big for localStorage (a few fill it), so chats keep only an id  shortcut: pictures of a deleted or cleared chat stay in the store; add a sweep when it gro
+?exports: imgId, putImg, getImg
+#ts #src

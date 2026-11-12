@@ -25,6 +25,10 @@ export const getKey = (id: string) => cache[id] ?? ''
 let timer: ReturnType<typeof setTimeout> | undefined
 export const setKey = (id: string, v: string) => {
   cache = { ...cache, [id]: v.trim() }
+  subs.forEach((f) => f())
   clearTimeout(timer) // typing writes once, not once per letter
   timer = setTimeout(() => save().catch(console.error), 400)
 }
+const subs = new Set<() => void>()
+/** Runs `f` after any key changes; returns the unsubscribe. */
+export const onKeys = (f: () => void) => { subs.add(f); return () => { subs.delete(f) } }

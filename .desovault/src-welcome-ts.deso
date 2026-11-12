@@ -1,0 +1,11 @@
+# src/welcome.ts
+?path: src/welcome.ts
+?kind: ts
+?lines: 76
+?generated: scan
+?about: The first note of every new project: a short guide to building the graph/map and working with it.
+?doc: The first note of every new project: a short guide to building the graph/map and working w Written in the app's own note format; "@" + a non-latin word is deliberately not a link, s 1. Граф — это заметки и связи 2. Что писать в заметке 3. Карта — то, что видит агент 4. Проект с кодом 1. The graph is notes and links 2. What goes in a note 3. The map is what the agent sees 4. A project with code
+?calls: ~src/components/Orchestra.tsx(Orchestra)
+?exports: welcomeNote
+#ts #src
+->@src-components-orchestra-tsx

@@ -1,0 +1,8 @@
+# archive/map-bench/genrefs.mjs
+?path: archive/map-bench/genrefs.mjs
+?kind: mjs
+?lines: 27
+?generated: scan
+?about: Multi-file questions for any Python project, with ground truth from plain text, not from the graph:
+?doc: Multi-file questions for any Python project, with ground truth from plain text, not from t "Which files (not tests) use the function/class `Sym`, defined in <path>?" Sym is a top-level def/class defined in exactly one non-test file and mentioned (as a whol those files are the answer. Grep can do this too, so the test shows what the graph adds (o node bench/genrefs.mjs <project dir> <count> [seed] > questions.json
+#mjs #archive

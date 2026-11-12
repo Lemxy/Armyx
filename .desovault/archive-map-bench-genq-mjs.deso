@@ -1,0 +1,8 @@
+# archive/map-bench/genq.mjs
+?path: archive/map-bench/genq.mjs
+?kind: mjs
+?lines: 38
+?generated: scan
+?about: Generates verified questions for any Python project from its own docstrings, so nobody tunes to hand
+?doc: Generates verified questions for any Python project from its own docstrings, so nobody tun "Which file defines the Python function/class documented as: <first docstring line>?" A question is kept only if the identifier is defined once outside tests, the docstring lin contain the identifier. One question per file, random with a fixed seed. node bench/genq.mjs <project dir> <count> [seed] > questions.json
+#mjs #archive

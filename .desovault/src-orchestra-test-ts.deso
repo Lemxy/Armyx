@@ -1,0 +1,13 @@
+# src/orchestra.test.ts
+?path: src/orchestra.test.ts
+?kind: ts
+?lines: 448
+?generated: scan
+?about: A fake screen: records every exec call and applies patches to a copy of the nodes.
+?doc: A fake screen: records every exec call and applies patches to a copy of the nodes. A coder A feeds the reviewer R; the reviewer says `says[i]` on its i-th look. the lead briefs only B: A keeps its old brief, so it is not asked again a plain answer with no sections runs nobody
+?calls: src/orchestra.ts(LEAD_TURNS+READ_ONLY+RETRIES), ~src-tauri/src/lib.rs(opened), src/dsprice.ts(dsUsage)
+?symbols: BRIEFING
+#ts #src
+->@src-orchestra-ts
+->@src-dsprice-ts
+->@src-tauri-src-lib-rs

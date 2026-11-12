@@ -1,0 +1,12 @@
+# archive/map-bench/gen-monorepo.mjs
+?path: archive/map-bench/gen-monorepo.mjs
+?kind: mjs
+?lines: 99
+?generated: scan
+?about: Generates a noisy monorepo for the bug-fix benchmark: 60 small services that all define the same fun
+?doc: Generates a noisy monorepo for the bug-fix benchmark: 60 small services that all define th (handleEvent, processItem), share three helper libraries, and are wired by one routing tab node bench/gen-monorepo.mjs <out dir>
+?callers: ~archive/map-bench/README.md
+?exports: roundMoney, clamp, isValidId, daysBetween, $, processItem, lateFee, handleEvent
+?symbols: DOMAINS, processItem, lateFee, handleEvent, ROUTES, dispatch
+?spans: processItem:41-45, dispatch:75-79
+#mjs #archive

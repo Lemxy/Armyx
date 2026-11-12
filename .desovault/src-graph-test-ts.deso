@@ -1,0 +1,8 @@
+# src/graph.test.ts
+?path: src/graph.test.ts
+?kind: ts
+?lines: 17
+?generated: scan
+?calls: src/layout.ts(communities+layout)
+#ts #src
+->@src-layout-ts

@@ -1,0 +1,12 @@
+# src/components/ContextMenu.tsx
+?path: src/components/ContextMenu.tsx
+?kind: tsx
+?lines: 60
+?generated: scan
+?about: keep the whole menu on screen, measured after render; grow from the corner nearest the cursor
+?doc: keep the whole menu on screen, measured after render; grow from the corner nearest the cur a submenu opens on hover, on the side that has room
+?callers: src/App.tsx, src/components/CircuitGraph.tsx, src/components/Orchestra.tsx, src/components/Sidebar.tsx
+?exports: Swatch, MenuItem, MenuState, ContextMenu
+?symbols: ContextMenu
+?spans: ContextMenu:8-60
+#tsx #src

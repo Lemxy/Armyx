@@ -1,0 +1,9 @@
+# vite.config.ts
+?path: vite.config.ts
+?kind: ts
+?lines: 15
+?generated: scan
+?about: Dynamic imports of Tauri modules are only discovered at runtime; pre-bundle them so dev never serves
+?doc: Dynamic imports of Tauri modules are only discovered at runtime; pre-bundle them so dev ne Cargo locks files under src-tauri/target; watching them throws EBUSY on Windows.
+?exports: defineConfig
+#ts

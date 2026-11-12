@@ -1,0 +1,10 @@
+# mcp/debt.mjs
+?path: mcp/debt.mjs
+?kind: mjs
+?lines: 24
+?generated: scan
+?about: Lists every `shortcut:` comment (a deliberate shortcut with its limit and when to upgrade) so "later
+?doc: Lists every `shortcut:` comment (a deliberate shortcut with its limit and when to upgrade) Run: node mcp/debt.mjs [dir...]   (default: the current folder)
+?exports: findDebt, debt
+?symbols: SKIP, TEXT
+#mjs #mcp

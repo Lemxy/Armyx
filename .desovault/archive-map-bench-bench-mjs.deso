@@ -1,0 +1,11 @@
+# archive/map-bench/bench.mjs
+?path: archive/map-bench/bench.mjs
+?kind: mjs
+?lines: 114
+?generated: scan
+?about: Real benchmark: the same questions answered by `claude -p`, all modes with Read/Grep/Glob available:
+?doc: Real benchmark: the same questions answered by `claude -p`, all modes with Read/Grep/Glob  alone   explores the project by itself map-v3  static map in the system prompt (the API caches it) + the best matches for the que map-v4  no map: the agent queries the graph through MCP tools (find only) map-v1  the first static map (only with OLD_DESO=<old deso.ts> and OLD_GRAPH=<graph dir fr Tokens, cost and turns come from the API's own usage report. `expect` is one path or a lis cargo run --example scan -- <project> <graph dir>   (in src-tauri/) node --experimental-strip-types bench/bench.mjs <project> <graph dir> <questions.json> [mo Env: MODES=alone,map-v3,hook  REPS=3  MAX_TURNS=n  EFFORT=medium
+?calls: ~src/deso.ts(MAP_INTRO+SMALL_PROJECT)
+?symbols: REPS, NOGREP, ARMYX_EXE, GRAPH_NOSEM, OLD_DESO, OLD_GRAPH, MODES, MAX_TURNS
+#mjs #archive
+->@src-deso-ts

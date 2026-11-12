@@ -1,0 +1,7 @@
+# src-tauri/Cargo.toml
+?path: src-tauri/Cargo.toml
+?kind: toml
+?lines: 26
+?generated: scan
+?doc: API keys go to the OS keychain
+#toml #srctauri

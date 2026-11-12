@@ -244,21 +244,35 @@ export const sure = (notes: Note[], focus: string) => { const h = scoredHits(not
 export const sureHits = (notes: Note[], focus: string, k = 5) => (sure(notes, focus) ? topHits(notes, focus, k) : '')
 
 /**
- * The source of the definitions a question names, when one file is a sure match: with it in the prompt the agent answers without
- * opening the file. Measured on 6 such questions (archive/map-bench/reserve.mjs): 27k -> 12k input tokens, 2.2 -> 1.2 turns.
- * Empty when the match is unsure, the question names no definition of that file, or the file moved on since the scan.
+ * The source of the definitions a question names: with it in the prompt the agent answers without opening the file.
+ * Measured on the questions it fires for (archive/map-bench/reserve.mjs): 27k -> 12k input tokens, 2.2 -> 1.2 turns.
+ * Empty when the question names no definition or the file moved on since the scan.
  */
+const CODE_NAME = /[a-z\d][A-Z]|_/ // camelCase or snake_case: not a word of the language the question is written in
 export const sliceFor = async (notes: Note[], focus: string, read: (path: string) => Promise<string>, max = 120) => {
-  if (!sure(notes, focus)) return ''
-  const n = scoredHits(notes, focus)[0].note, path = prop(n.content, 'path'), asked = new Set(terms(focus))
-  const spans = (prop(n.content, 'spans')?.split(', ') ?? []).filter((s) => terms(s.split(':')[0]).some((t) => asked.has(t))).slice(0, 2)
-  if (!path || !spans.length) return ''
-  const lines = (await read(path)).split('\n')
-  return spans.flatMap((s) => {
-    const [name, range] = s.split(':'), [a, b] = range.split('-').map(Number)
-    if (!lines[a - 1]?.includes(name)) return [] // edited since the scan: these are no longer its lines
-    return [`# ${path} lines ${a}-${Math.min(b, a + max)}\n${lines.slice(a - 1, Math.min(b, a + max)).join('\n')}`]
-  }).join('\n\n')
+  const hits = scoredHits(notes, focus), safe = hits.length > 0 && (hits.length < 2 || hits[0].score / hits[1].score >= SURE)
+  const words = new Set(focus.match(/[\p{L}\d_]+/gu) ?? []), lower = new Set([...words].map((w) => w.toLowerCase())), asked = new Set(terms(focus))
+  // Which definitions, best first:
+  //   0 the question spells the name as code (callApi, parse_answer): wherever it lives, the file need not be a sure match
+  //   1 the question says the whole name as a plain word ("the retry helper") and it lives in one of the 3 best files
+  //   2 the best file is a sure match and the name only shares a word with the question: a guess, so only when 0 and 1 found nothing
+  // Among equals the shorter definition goes first: "the orchestra's retry helper" means retry (9 lines), not the Orchestra component (120).
+  const all = hits.flatMap(({ note }, rank) => (prop(note.content, 'spans')?.split(', ') ?? []).flatMap((s) => {
+    const name = s.split(':')[0], path = prop(note.content, 'path'), [a, b] = s.split(':')[1].split('-').map(Number)
+    const pri = words.has(name) && CODE_NAME.test(name) ? 0 : rank < 3 && name.length > 2 && lower.has(name.toLowerCase()) ? 1 : safe && rank === 0 && terms(name).some((t) => asked.has(t)) ? 2 : -1
+    return pri < 0 || !path ? [] : [{ pri, rank, name, path, a, b: Math.min(b, a + max) }]
+  })).sort((x, y) => x.pri - y.pri || (x.pri === 2 ? 0 : x.b - x.a - (y.b - y.a)) || x.rank - y.rank)
+  const src = new Map<string, string[]>(), out: string[] = []
+  let size = 0
+  for (const { name, path, a, b } of all.filter((c) => (c.pri === 2) === (all[0].pri === 2)).slice(0, 2)) {
+    if (out.length && size + b - a > max) break // the second definition only while both stay one screen of code
+    if (!src.has(path)) src.set(path, (await read(path)).split('\n'))
+    const lines = src.get(path)!
+    if (!lines[a - 1]?.includes(name)) continue // edited since the scan: these are no longer its lines
+    out.push(`# ${path} lines ${a}-${b}\n${lines.slice(a - 1, b).join('\n')}`)
+    size += b - a
+  }
+  return out.join('\n\n')
 }
 
 /**

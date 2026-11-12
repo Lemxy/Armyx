@@ -1,0 +1,12 @@
+# src/layout.ts
+?path: src/layout.ts
+?kind: ts
+?lines: 72
+?generated: scan
+?about: Left-to-right layers: each note sits one column right of the deepest note linking to it.
+?doc: forward walk from roots; a link back into the current path closes a cycle and is skipped order by average row of parents so links cross as little as possible a neighbour's vote counts more the more neighbours they share, so a lone bridge link loses switch only for a strictly bigger majority, so a lone bridge cannot merge two groups
+?callers: src/components/CircuitGraph.tsx, src/graph.test.ts, ~archive/map-bench/README.md, ~src/components/Editor.tsx, ~src/i18n.ts
+?exports: P, Edge, layout, communities
+?symbols: layout, communities
+?spans: layout:6-46, communities:49-72
+#ts #src

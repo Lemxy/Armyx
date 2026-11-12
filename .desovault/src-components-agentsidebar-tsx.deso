@@ -1,0 +1,29 @@
+# src/components/AgentSidebar.tsx
+?path: src/components/AgentSidebar.tsx
+?kind: tsx
+?lines: 441
+?generated: scan
+?doc: [id, label]. Every model takes an effort level: Claude via output_config.effort, Gemini vi Free on OpenRouter (checked 2026-11-10; the free list changes, "openrouter/free" always pi Where a simple lookup goes when "cheap model for simple lookups" is on. [level, Gemini thinking budget] What the agent keeps in context: the newest turns that fit. Older turns stay in the saved  Without the map: the agent has the code itself. Measured: half the input tokens and one tu Claude 5.x: adaptive thinking + effort; budget_tokens is rejected with a 400. Two cache po through the top-level cache_control, the end of the conversation, so the next turn rereads ---- persistence: settings are global, chats are per project ----
+?calls: src/nano.ts(nanoAgy+nanoImage), ~src-tauri/src/lib.rs(save_image), src/brands.tsx(Brand), src/components/Markdown.tsx(Markdown), src/components/Segmented.tsx(Segmented), src/components/SettingsModal.tsx(SettingsModal), src/components/StoredImg.tsx(StoredImg), src/debounce.ts(useDebounced)
+?callers: src/App.tsx, src/components/Orchestra.tsx, ~archive/map-bench/README.md, ~archive/map-bench/orchestra.mjs, ~archive/map-bench/reserve.mjs, ~src/deso.ts, ~src/dsprice.ts
+?exports: MODELS, AgentSidebar
+?symbols: AGENTS, MODELS, CHEAP, EFFORTS, MAX_TURNS, SYSTEM, SLICE_SYSTEM, CODE_HEAD, callApi, DEFAULT, useTypewriter, Assistant, AgentSidebar, agyRefresh
+?spans: MODELS:34-41, callApi:69-111, useTypewriter:127-137, Assistant:142-170, AgentSidebar:177-441
+#tsx #src
+->@src-debounce-ts
+->@src-brands-tsx
+->@src-components-segmented-tsx
+->@src-components-markdown-tsx
+->@src-i18n-ts
+->@src-deso-ts
+->@src-sse-ts
+->@src-mapmem-ts
+->@src-keys-ts
+->@src-components-settingsmodal-tsx
+->@src-deepseek-ts
+->@src-nano-ts
+->@src-imgs-ts
+->@src-components-storedimg-tsx
+->@src-pics-ts
+->@src-vault-ts
+->@src-tauri-src-lib-rs

@@ -1,0 +1,10 @@
+# src/components/Segmented.tsx
+?path: src/components/Segmented.tsx
+?kind: tsx
+?lines: 18
+?generated: scan
+?about: Pill switch with a thumb that glides to the active option. Options share the width equally.
+?callers: src/components/AgentSidebar.tsx, src/components/SettingsModal.tsx, src/components/SourceEditor.tsx
+?exports: Segmented
+?symbols: Segmented
+#tsx #src

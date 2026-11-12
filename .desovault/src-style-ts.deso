@@ -1,0 +1,11 @@
+# src/style.ts
+?path: src/style.ts
+?kind: ts
+?lines: 8
+?generated: scan
+?about: The art standard of SmartModelSystem, copied word for word from its docs/04_prompt_templates.md (sec
+?doc: The art standard of SmartModelSystem, copied word for word from its docs/04_prompt_templat project's standard changes, regenerate these from that file instead of editing them by han
+?callers: src/components/Orchestra.tsx
+?exports: SHEET_PROMPT, STYLE_PROMPT
+?symbols: SHEET_PROMPT, STYLE_PROMPT
+#ts #src

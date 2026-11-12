@@ -1,0 +1,8 @@
+# src/sse.ts
+?path: src/sse.ts
+?kind: ts
+?lines: 18
+?generated: scan
+?about: Reads a server-sent-event response and calls `on` with the JSON of every `data:` line, as it arrives
+?exports: sse
+#ts #src

@@ -1,0 +1,15 @@
+# src-tauri/src/lib.rs
+?path: src-tauri/src/lib.rs
+?kind: rs
+?lines: 621
+?generated: scan
+?about: Vault dir: $DESO_VAULT, else ../vault (tauri dev runs from src-tauri).
+?doc: Vault dir: $DESO_VAULT, else ../vault (tauri dev runs from src-tauri). Switch the active vault folder (created if missing); returns the resolved path. Show the project folder in the system file manager (explorer's exit code is 1 even on succ Where notes live: the folder itself when it already holds .deso files (or is empty), other `<folder>/.desovault`, so indexing someone's code project never scatters files through it. A missing data dir just means no notes yet. One unreadable file must not hide the whole vault. Sync commands run on the UI thread; reading a big scanned graph there freezes the window. A picture saved next to the notes (`images/<name>.<ext>`); returns its absolute path (the
+?calls: src-tauri/src/scan.rs(SKIP_DIRS+scan_cached), src-tauri/src/worktree.rs(create+discard)
+?callers: src/keys.ts, ~archive/map-bench/orchestra.mjs, ~src/components/AgentSidebar.tsx, ~src/components/SourceEditor.tsx, ~src/deso.ts, ~src/mapmem.ts, ~src/orchestra.test.ts, ~src/orchestra.ts
+?exports: scan, run
+?symbols: set_root, get_root, open_root, list_notes, read_note, save_note, save_image, image_path, read_image, delete_note, read_source, save_source, index_project, keys_load, keys_save, watch_project, run_agent, stop_agents, worktree_create, project_stamp, files_stamp, worktree_diff, worktree_apply, worktree_discard, agy_models, claude_usage, agy_usage, ROOT, root, DESO_VAULT, set_root, get_root, open_root, HIDDEN, has_deso, data_dir, valid, notes, list_notes, read_note, save_note, save_image, image_path, read_image, delete_note, source_path, read_source, save_source, GENERATED, write_graph, graph_dir, index_project, KEYCHAIN, keys_get, keys_load, keys_save, WATCHER, relevant, watch_project, rel_to
+?spans: set_root:16-21, data_dir:43-49, valid:57-63, notes:65-79, save_note:94-99, save_image:103-111, image_path:115-121, read_image:125-129, source_path:138-143, read_source:147-151, write_graph:163-179, index_project:190-200, keys_get:205-211, watch_project:232-246, rel_to:256-261, opened:265-278, parse_answer:282-301, parse_codex:304-320, run_agent:326-401, stop_agents:408-415, spawn_in:421-441, project_stamp:448-454, files_stamp:458-464, agy_models:480-491, claude_usage:497-503, agy_usage:516-523, source_files_stay_inside_the_project:556-571, keychain_round_trip:582-588, claude_events_give_the_answer_and_the_files_it_opened:591-605
+#rs #srctauri
+->@src-tauri-src-scan-rs
+->@src-tauri-src-worktree-rs

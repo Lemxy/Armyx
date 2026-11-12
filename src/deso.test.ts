@@ -115,6 +115,18 @@ test('sliceFor: the lines of the definition a sure question names, nothing when 
   expect(await sliceFor(notes, 'what does chargeCard return', async () => '// rewritten\n' + src)).toBe('')
 })
 
+test('sliceFor: a definition named in the question is found though no file is a sure match, the exact name beats a shared word', async () => {
+  const notes = [
+    { name: 'a', content: '# a\n?path: src/a.ts\n?symbols: sendMail, retry\n?spans: sendMail:1-3, retry:5-7' },
+    { name: 'b', content: '# b\n?path: src/b.ts\n?symbols: sendMail, sendMailLater\n?spans: sendMailLater:1-3' },
+    ...Array.from({ length: 6 }, (_, i) => ({ name: `c${i}`, content: `# c${i}\n?path: src/c${i}.ts\n?symbols: other${i}` })), // a word in over 40% of the files does not count
+  ]
+  const read = async (p: string) => (p === 'src/a.ts' ? 'function sendMail() {\n  return 1\n}\n\nfunction retry() {\n  return 2\n}' : 'function sendMailLater() {\n  return 3\n}')
+  expect(sure(notes, 'what does sendMail return')).toBe(false)
+  expect(await sliceFor(notes, 'what does sendMail return', read)).toBe('# src/a.ts lines 1-3\nfunction sendMail() {\n  return 1\n}') // not sendMailLater
+  expect(await sliceFor(notes, 'what does the retry helper of sendMail return', read)).toContain('# src/a.ts lines 5-7') // a plain word that is a whole name
+})
+
 test('trimBatch: the start of the history stays put between overflows', () => {
   const msgs = Array.from({ length: 40 }, (_, i) => ({ i, text: 'x'.repeat(10) })), len = (m: { text: string }) => m.text.length
   const starts = Array.from({ length: 40 }, (_, n) => trimBatch(msgs.slice(0, n + 1), 24, 30000, len)[0].i)

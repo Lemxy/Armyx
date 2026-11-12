@@ -1,0 +1,7 @@
+# src-tauri/build.rs
+?path: src-tauri/build.rs
+?kind: rs
+?lines: 3
+?generated: scan
+?symbols: main
+#rs #srctauri

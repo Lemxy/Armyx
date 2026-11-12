@@ -1,0 +1,12 @@
+# src/main.tsx
+?path: src/main.tsx
+?kind: tsx
+?lines: 10
+?generated: scan
+?about: The browser's own right-click menu (Back, Refresh, Save as, Inspect) has no place in the app: the ap
+?doc: The browser's own right-click menu (Back, Refresh, Save as, Inspect) has no place in the a
+?calls: src/keys.ts(loadKeys)
+#tsx #src
+->@src-app-tsx
+->@src-keys-ts
+->@src-index-css
