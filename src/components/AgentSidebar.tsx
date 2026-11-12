@@ -1,23 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useDebounced } from '../debounce'
-import { ArrowUp, Check, ChevronDown, Clock, Copy, CornerDownLeft, FolderOpen, Paperclip, Plus, Trash2, TriangleAlert, X } from 'lucide-react'
+import { ArrowUp, Check, ChevronDown, Clock, Copy, CornerDownLeft, FolderOpen, Maximize2, Minimize2, Paperclip, Plus, Square, Trash2, TriangleAlert, X } from 'lucide-react'
 import { Brand } from '../brands'
 import Segmented from './Segmented'
 import Markdown from './Markdown'
 import { useI18n } from '../i18n'
-import { graphMap, MAP_INTRO, sliceFor, sure, tokens, topHits, trimBatch, type Note } from '../deso'
+import { graphMap, MAP_INTRO, sliceFor, tokens, topHits, trimBatch, type Note } from '../deso'
 import { sse } from '../sse'
 import { mapOpts, recordRead } from '../mapmem'
 import { getKey, onKeys } from '../keys'
 import SettingsModal from './SettingsModal'
-import { dsChat, orChat } from '../deepseek'
+import { dsChat, nvChat, orChat } from '../deepseek'
 import { nanoAgy, nanoImage } from '../nano'
 import { getImg, imgId, putImg } from '../imgs'
 import StoredImg from './StoredImg'
 import { picPath, readPics } from '../pics'
-import { agyModels, agyUsage, claudeUsage, inTauri, openRoot, readSource, runAgent, saveImage } from '../vault'
+import { agyModels, agyUsage, claudeUsage, hasCli, inTauri, openRoot, openUrl, readSource, runAgent, saveImage, stopAgents } from '../vault'
 
-type Id = 'claude' | 'agy' | 'deepseek' | 'openrouter' | 'nano'
+type Id = 'claude' | 'agy' | 'deepseek' | 'openrouter' | 'nvidia' | 'nano'
 type Mode = 'cli' | 'api'
 type Msg = { role: 'user' | 'assistant'; text: string; at: number; error?: boolean; tin?: number; tout?: number; img?: string; imgId?: string; pics?: string[]; via?: string; code?: string } // img = a generated picture; only imgId is saved (src/imgs.ts). pics = ids of pictures you attached. code = the source the question was about (sliceFor), sent with it
 type Chat = { id: string; title: string; msgs: Msg[]; at: number }
@@ -27,8 +27,19 @@ const AGENTS = {
   agy: { label: 'Antigravity', cli: 'agy', key: 'Gemini API Key' },
   deepseek: { label: 'DeepSeek', cli: '', key: 'DeepSeek API Key' }, // API only: no CLI
   openrouter: { label: 'OpenRouter', cli: '', key: 'OpenRouter API Key' }, // API only: free models (":free")
+  nvidia: { label: 'NVIDIA', cli: '', key: 'NVIDIA API Key' }, // API only: NIM models on build.nvidia.com
   nano: { label: 'Nano Banana', cli: '', key: 'Gemini API Key' }, // API only, draws pictures; uses the Gemini key of Antigravity
 } as const
+
+// Where to get what an agent needs (pages checked 2026-11-12): an API key, or the CLI to install.
+const GET: Record<Id, { key: string; cli?: string }> = {
+  claude: { key: 'https://platform.claude.com/settings/keys', cli: 'https://code.claude.com/docs/en/setup' },
+  agy: { key: 'https://aistudio.google.com/apikey', cli: 'https://antigravity.google/download' },
+  deepseek: { key: 'https://platform.deepseek.com/api_keys' },
+  openrouter: { key: 'https://openrouter.ai/keys' },
+  nvidia: { key: 'https://build.nvidia.com/settings/api-keys' },
+  nano: { key: 'https://aistudio.google.com/apikey' },
+}
 
 // [id, label]. Every model takes an effort level: Claude via output_config.effort, Gemini via a thinking budget.
 export const MODELS = {
@@ -36,11 +47,10 @@ export const MODELS = {
   agy: [['gemini-3.8-flash', 'Gemini 3.8 Flash'], ['gemini-3.5-flash-lite', 'Gemini 3.5 Flash-Lite']],
   nano: [['gemini-2.5-flash-image', 'Nano Banana'], ['gemini-3-pro-image-preview', 'Nano Banana Pro']], // image models: the orchestra and the chat
   deepseek: [['deepseek-v4-flash', 'DeepSeek V4 Flash'], ['deepseek-v4-pro', 'DeepSeek V4 Pro'], ['deepseek-chat', 'DeepSeek V3 (chat)'], ['deepseek-reasoner', 'DeepSeek R1 (reasoner)']],
+  nvidia: [['nvidia/nemotron-3.5-super-vl-120b-a12b', 'Nemotron 3.5 Super VL 120B'], ['mistralai/mistral-large-4-1t-a52b', 'Mistral Large 4'], ['nvidia/nemotron-3.5-lightning-30b-a3b', 'Nemotron 3.5 Lightning 30B'], ['poolside/laguna-xs-2.1', 'Laguna XS 2.1 (coding)'], ['nvidia/nemotron-3.5-bolt-e4b', 'Nemotron 3.5 Bolt E4B'], ['minimaxai/minimax-m3.1-flash', 'MiniMax M3.1 Flash (slow)'], ['nvidia/nemotron-3-ultra-550b-a55b', 'Nemotron 3 Ultra 550B (slow)']], // free endpoints, tried with a real key 2026-11-12; Gemma 4 31B and Kimi K2.6 answered 404 "not found for account" (they may need access enabled on build.nvidia.com)
   // Free on OpenRouter (checked 2026-11-10; the free list changes, "openrouter/free" always picks one that is up). Text only, rate-limited.
   openrouter: [['openrouter/free', 'Auto (any free model)'], ['nvidia/nemotron-3-ultra-550b-a55b:free', 'Nemotron 3 Ultra (free)'], ['google/gemma-4-31b-it:free', 'Gemma 4 31B (free)'], ['nvidia/nemotron-3.5-lightning:free', 'Nemotron 3.5 Lightning (free)'], ['cohere/north-mini-code:free', 'North Mini Code (free)'], ['thinkingmachines/inkling-2-small:free', 'Inkling 2 Small (free)']],
 } as const
-// Where a simple lookup goes when "cheap model for simple lookups" is on.
-const CHEAP = { claude: MODELS.claude[2][0], agy: MODELS.agy[1][0], deepseek: MODELS.deepseek[0][0], openrouter: MODELS.openrouter[0][0] } as const
 // [level, Gemini thinking budget]
 const EFFORTS = [['low', 1024], ['medium', 4096], ['high', 16384], ['max', 32768]] as const
 
@@ -91,6 +101,10 @@ async function callApi(id: Id, key: string, system: string, msgs: Msg[], model: 
     const j = await dsChat(key, { model, messages: [{ role: 'system', content: system }, ...msgs.map((m) => ({ role: m.role, content: full(m) }))] }, onText)
     return j.choices?.[0]?.message?.content ?? ''
   }
+  if (id === 'nvidia') {
+    const j = await nvChat(key, { model, messages: [{ role: 'system', content: system }, ...msgs.map((m) => ({ role: m.role, content: full(m) }))] }, onText)
+    return j.choices?.[0]?.message?.content ?? ''
+  }
   if (id === 'openrouter') {
     const j = await orChat(key, { model, messages: [{ role: 'system', content: system }, ...msgs.map((m) => ({ role: m.role, content: full(m) }))] }, onText)
     return j.choices?.[0]?.message?.content ?? ''
@@ -118,9 +132,9 @@ const cliPrompt = (system: string, msgs: Msg[], paths: Map<string, string>, extr
 const load = <T,>(k: string, d: T): T => { try { return JSON.parse(localStorage.getItem(k) ?? '') as T } catch { return d } }
 const save = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.stringify(v)) } catch (e) { console.error(e) } }
 const CFG = 'desovault.agent'
-type Cfg = { id: Id; models: Record<Id, string>; modes: Record<Id, Mode>; effort: number; auto?: boolean }
+type Cfg = { id: Id; models: Record<Id, string>; modes: Record<Id, Mode>; effort: number }
 type Row = { title?: string; k: 'usage5h' | 'usage7d'; pct: number; reset: string }
-const DEFAULT: Cfg = { id: 'claude', models: { claude: MODELS.claude[0][0], agy: MODELS.agy[0][0], deepseek: MODELS.deepseek[0][0], openrouter: MODELS.openrouter[0][0], nano: MODELS.nano[0][0] }, modes: { claude: inTauri ? 'cli' : 'api', agy: inTauri ? 'cli' : 'api', deepseek: 'api', openrouter: 'api', nano: 'api' }, effort: 1 }
+const DEFAULT: Cfg = { id: 'claude', models: { claude: MODELS.claude[0][0], agy: MODELS.agy[0][0], deepseek: MODELS.deepseek[0][0], openrouter: MODELS.openrouter[0][0], nvidia: MODELS.nvidia[0][0], nano: MODELS.nano[0][0] }, modes: { claude: inTauri ? 'cli' : 'api', agy: inTauri ? 'cli' : 'api', deepseek: 'api', openrouter: 'api', nvidia: 'api', nano: 'api' }, effort: 1 }
 const uid = () => Math.random().toString(36).slice(2, 10)
 
 /** Reveals `text` progressively (~4s max) so replies appear typed. */
@@ -177,9 +191,14 @@ const ago = (at: number) => {
 export default function AgentSidebar({ notes, note, project, onInsert, onClose }: { notes: Note[]; note?: Note; project: string; onInsert: (t: string) => void; onClose: () => void }) {
   const { t } = useI18n()
   const [cfg, setCfg] = useState<Cfg>(() => ({ ...DEFAULT, ...load<Partial<Cfg>>(CFG, {}) }))
-  const [keys, setKeys] = useState<Record<Id, string>>(() => ({ claude: getKey('claude'), agy: getKey('agy'), deepseek: getKey('deepseek'), openrouter: getKey('openrouter'), nano: getKey('agy') })) // kept in local storage (src/keys.ts)
+  const [keys, setKeys] = useState<Record<Id, string>>(() => ({ claude: getKey('claude'), agy: getKey('agy'), deepseek: getKey('deepseek'), openrouter: getKey('openrouter'), nvidia: getKey('nvidia'), nano: getKey('agy') })) // kept in local storage (src/keys.ts)
   const [keysOpen, setKeysOpen] = useState(false)
-  useEffect(() => onKeys(() => setKeys({ claude: getKey('claude'), agy: getKey('agy'), deepseek: getKey('deepseek'), openrouter: getKey('openrouter'), nano: getKey('agy') })), [])
+  const [wide, setWide] = useState(false) // the panel fills the whole window
+  const [clis, setClis] = useState<Record<string, boolean>>({}) // which CLIs are installed (unknown until checked)
+  const [need, setNeed] = useState<Id | null>(null) // the agent the user tried to pick without a key or CLI
+  const stopRef = useRef<(() => void) | null>(null), liveTok = useRef<object>(), liveRef = useRef('')
+  useEffect(() => { for (const c of ['claude', 'agy']) hasCli(c).then((ok) => setClis((s) => ({ ...s, [c]: ok }))) }, [])
+  useEffect(() => onKeys(() => setKeys({ claude: getKey('claude'), agy: getKey('agy'), deepseek: getKey('deepseek'), openrouter: getKey('openrouter'), nvidia: getKey('nvidia'), nano: getKey('agy') })), [])
   const [chats, setChats] = useState<Chat[]>(() => load<Chat[]>(`desovault.chats.${project}`, []))
   const [activeId, setActiveId] = useState(() => chats[0]?.id ?? '')
   const [showCfg, setShowCfg] = useState(false) // the model picker opens from the chip above the message box
@@ -198,7 +217,7 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
   useEffect(() => { save(`desovault.chats.${project}`, chats.map((c) => ({ ...c, msgs: c.msgs.map(({ img, ...m }) => m) }))) }, [chats, project]) // pictures are too big for localStorage: they live in the image store
 
   const { id, modes, effort } = cfg
-  const apiOnly = id === 'deepseek' || id === 'openrouter' || id === 'nano'
+  const apiOnly = id === 'deepseek' || id === 'openrouter' || id === 'nvidia' || id === 'nano'
   const a = AGENTS[id], mode: Mode = apiOnly ? 'api' : modes[id], key = keys[id]
   const [agyList, setAgyList] = useState<[string, string][]>([])
   useEffect(() => { if (inTauri) agyModels().then(setAgyList).catch(console.error) }, [])
@@ -208,9 +227,11 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
   const model = list.some((m) => m[0] === cfg.models[id]) ? cfg.models[id] : list[0][0]
   // `agy --effort` conflicts with --model, so there effort is part of the model name (…-high).
   const effortFixed = id === 'agy' && mode === 'cli'
-  const real = mode === 'cli' ? inTauri : !!key || (id === 'nano' && inTauri) // Nano Banana without a key is drawn by the Antigravity CLI
+  const real = mode === 'cli' ? inTauri && clis[a.cli] !== false : !!key || (id === 'nano' && inTauri) // Nano Banana without a key is drawn by the Antigravity CLI
   // The CLI's own agy list has no known cheap entry. Measured on 15 questions about the code: Haiku 30/30 right at 1/23 of Sonnet's price.
   const routable = id !== 'nano' && !fromCli
+  // an agent can be picked when its API key is set or its CLI is installed; otherwise the picker says what to get and links to it
+  const have = (k: Id) => !!keys[k] || (k === 'nano' ? !!clis.agy : !!clis[AGENTS[k].cli])
   const status = t(real ? (mode === 'cli' ? 'online' : 'ready') : mode === 'cli' ? 'simBrowser' : 'simKey')
 
   const slowNotes = useDebounced(notes) // note edits settle before the map is rebuilt
@@ -226,7 +247,10 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
     const text = prompt.trim()
     if (!text || busy) return
     if (text === '/clear') { newChat(); setPending([]); return } // a fresh conversation; the old one stays in the history
-    setPrompt(''); setPending([]); setBusy(true); setLive('')
+    setPrompt(''); setPending([]); setBusy(true); setLive(''); liveRef.current = ''
+    const tok = (liveTok.current = {}) // the stop button drops this token, so an abandoned call can no longer write into the chat box
+    const onLive = (x: string) => { if (liveTok.current === tok) { liveRef.current = x; setLive(x) } }
+    const stopped = new Promise<'stop'>((res) => { stopRef.current = () => res('stop') })
     // when the question surely points at one file and names a definition in it, the code itself goes along
     const code = inTauri && id !== 'nano' ? await sliceFor(notes, text, readSource).catch(() => '') : ''
     const user: Msg = { role: 'user', text, at: Date.now(), pics: pending.length ? pending.map((p) => p.id) : undefined, code: code || undefined }
@@ -238,13 +262,12 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
     const system = SYSTEM(map)
     const cliSys = code ? SLICE_SYSTEM : system // the CLI agent got the code: it needs no map
     const tin = tokens((mode === 'cli' ? cliSys : system) + history.map(full).join('\n'))
-    let reply: Msg
-    // A short lookup the map answers with confidence (one file far ahead of the rest) does not need the big model.
-    const easy = !!cfg.auto && routable && !user.pics && text.length <= 200 && sure(notes, text)
-    const useModel = easy ? CHEAP[id as keyof typeof CHEAP] : model, level = EFFORTS[easy ? 0 : effort][0]
+    let reply: Msg = { role: 'assistant', text: '', at: 0 } // filled by the call below (or the stop button)
+    const useModel = model, level = EFFORTS[effort][0]
     try {
+      const done = await Promise.race([(async () => {
       if (!real) throw new Error(status)
-      if ((id === 'deepseek' || id === 'openrouter') && user.pics) throw new Error(t('noImagesDs'))
+      if ((id === 'deepseek' || id === 'openrouter' || id === 'nvidia') && user.pics) throw new Error(t('noImagesDs'))
       // the newest 4 pictures of the conversation go along: as data for the APIs, as files on disk for the CLIs
       const pics = new Map<string, string>(), paths = new Map<string, string>()
       for (const i of history.flatMap((m) => m.pics ?? []).slice(-4)) {
@@ -264,15 +287,21 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
         // The CLI agent can open files, so it also gets the closest files with the lines of their definitions (after the dialogue: the cached start is untouched).
         const hits = topHits(notes, text, 5)
         const run = () => runAgent(a.cli, cliPrompt(cliSys, history, paths, code ? `${CODE_HEAD}\n${code}` : hits && `# Best matches for the last message\n${hits}`), useModel, effortFixed || useModel.includes('haiku') ? '' : level).then((r) => { recordRead(r.files); return r.text })
-        const out = mode === 'cli' ? await run() : await callApi(id, key, system, history, useModel, easy ? 0 : effort, pics, setLive)
-        reply = { role: 'assistant', text: out.trim(), at: Date.now(), tin, tout: tokens(out), via: easy ? list.find((m) => m[0] === useModel)?.[1] ?? useModel : undefined } // via = the cheaper model that answered instead of yours
+        const out = mode === 'cli' ? await run() : await callApi(id, key, system, history, useModel, effort, pics, onLive)
+        reply = { role: 'assistant', text: out.trim(), at: Date.now(), tin, tout: tokens(out) }
       }
+      return 'ok' as const
+      })(), stopped])
+      if (done === 'stop') reply = { role: 'assistant', text: liveRef.current.trim() || t('stopped'), at: Date.now(), tin }
     } catch (e) {
       reply = { role: 'assistant', text: `Error: ${e instanceof Error ? e.message : e}`, at: Date.now(), error: true }
     }
     patch(cid, (c) => ({ ...c, msgs: [...c.msgs, reply], at: Date.now() }))
+    liveTok.current = undefined; stopRef.current = null
     setFreshAt(mode === 'api' && id !== 'nano' ? 0 : reply.at); setBusy(false); setLive('') // a streamed answer was already read as it came: no typewriter
   }
+
+  const stop = () => { liveTok.current = undefined; if (mode === 'cli' || id === 'nano') stopAgents().catch(console.error); stopRef.current?.() }
 
   // The picture is written next to the notes (images/<id>.png) and a Markdown link to it goes into the open note.
   const insertImage = async (m: Msg) => {
@@ -333,13 +362,14 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
   const effortName = effortFixed || apiOnly ? '' : ` · ${t(EFFORTS[effort][0])}`
 
   return (
-    <aside className="anim-slide w-[26rem] shrink-0 border-l border-line bg-surface flex flex-col text-sm relative">
+    <aside className={`anim-slide bg-surface flex flex-col text-sm ${wide ? 'fixed inset-0 z-40' : 'w-[26rem] shrink-0 border-l border-line relative'}`}>
       <div className="flex items-center gap-1 px-4 h-14 border-b border-line">
         <span className="font-serif text-lg font-semibold truncate">{chat?.title ?? t('chatNew')}</span>
         <span className="ml-auto" />
         <button onClick={() => openRoot().catch(console.error)} title={t('openFolder')} className={icon}><FolderOpen size={15} /></button>
         <button onClick={newChat} title={t('chatNew')} className={icon}><Plus size={15} /></button>
         <button onClick={() => setShowHist((v) => !v)} title={t('history')} className={`${icon} ${showHist ? 'bg-panel text-fg' : ''}`}><Clock size={15} /></button>
+        <button onClick={() => setWide((v) => !v)} title={t(wide ? 'agentNarrow' : 'agentWide')} className={icon}>{wide ? <Minimize2 size={15} /> : <Maximize2 size={15} />}</button>
         <button onClick={onClose} title={t('close')} className={icon}><X size={15} /></button>
       </div>
 
@@ -385,16 +415,23 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
       <div className="px-4 pt-2 pb-3 relative">
         {!real && <div className="mb-2 flex items-center gap-2 px-3 py-2 rounded-xl text-xs border border-line bg-panel">
           <TriangleAlert size={13} className="text-accent shrink-0" /><span className="flex-1 min-w-0">{status}</span>
-          {mode === 'api' && <button onClick={() => setKeysOpen(true)} className="shrink-0 text-accent hover:underline">{t('gotoKeys')}</button>}</div>}
+          {mode === 'api' && <button onClick={() => setKeysOpen(true)} className="shrink-0 text-accent hover:underline">{t('gotoKeys')}</button>}
+          <button onClick={() => openUrl(mode === 'cli' ? (GET[id].cli ?? GET[id].key) : GET[id].key).catch(console.error)} className="shrink-0 text-accent hover:underline">{t(mode === 'cli' ? 'getCliLink' : 'getKeyLink')}</button></div>}
         {showCfg && <>
           <div className="fixed inset-0 z-10" onMouseDown={() => setShowCfg(false)} />
           <div className="anim-rise absolute left-3 right-3 bottom-full mb-1 z-20 max-h-[75vh] overflow-auto rounded-2xl bg-surface border border-line shadow-float p-3 flex flex-col gap-3">
             <div className="grid grid-cols-5 gap-1.5">
               {(Object.keys(AGENTS) as Id[]).map((k) => (
-                <button key={k} onClick={() => set({ id: k })} title={AGENTS[k].label}
-                  className={`btn-press flex flex-col items-center gap-1 py-2 rounded-xl border text-micro ${k === id ? 'border-accent bg-accent-dim text-fg' : 'border-line text-dim hover:text-fg'}`}>
+                <button key={k} onClick={() => { if (have(k) || k === id) { set({ id: k }); setNeed(null) } else setNeed(k) }} title={AGENTS[k].label}
+                  className={`btn-press flex flex-col items-center gap-1 py-2 rounded-xl border text-micro ${k === id ? 'border-accent bg-accent-dim text-fg' : need === k ? 'border-status-err text-fg' : have(k) ? 'border-line text-dim hover:text-fg' : 'border-line text-dim opacity-40 hover:opacity-70'}`}>
                   <Brand agent={k} size={18} /><span className="max-w-full truncate px-0.5">{AGENTS[k].label}</span></button>))}
             </div>
+            {need && <div className="flex flex-col gap-1.5 px-3 py-2 rounded-xl border border-line bg-panel text-xs">
+              <span>{AGENTS[need].label}: {t('needSetup')}</span>
+              <button onClick={() => { setShowCfg(false); setKeysOpen(true) }} className="text-left text-accent hover:underline">{t('gotoKeys')}</button>
+              <button onClick={() => openUrl(GET[need].key).catch(console.error)} className="text-left text-accent hover:underline break-all">{t('getKeyLink')}: {GET[need].key.replace('https://', '')}</button>
+              {GET[need].cli && <button onClick={() => openUrl(GET[need].cli!).catch(console.error)} className="text-left text-accent hover:underline break-all">{t('getCliLink')}: {GET[need].cli!.replace('https://', '')}</button>}
+            </div>}
             <div className="flex flex-col gap-0.5">
               {list.map(([v, l]) => (
                 <button key={v} onClick={() => set({ models: { ...cfg.models, [id]: v } })}
@@ -409,7 +446,6 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
                   ? <p className="px-3.5 py-2.5 rounded-xl bg-field border border-line text-micro leading-relaxed text-dim">{t('effortInName')}</p>
                   : <Segmented value={String(effort)} onChange={(v) => set({ effort: +v })} options={EFFORTS.map(([k], i) => [String(i), t(k)] as const)} />}
               </div>}
-              {routable && <label title={t('autoRouteTip')} className="flex items-center gap-2 text-xs text-dim hover:text-fg cursor-pointer"><input type="checkbox" checked={!!cfg.auto} onChange={(e) => set({ auto: e.target.checked })} />{t('autoRoute')}</label>}
               {!apiOnly && <details className="text-xs"><summary className="cursor-pointer text-dim hover:text-fg">{t('usage')}</summary><Limits /></details>}
             </div>}
             {mode === 'api' && <button onClick={() => { setShowCfg(false); setKeysOpen(true) }} className={`text-xs text-left hover:text-fg ${key ? 'text-dim' : 'text-accent'}`}>{key ? '✓ ' : ''}{t('gotoKeys')}</button>}
@@ -425,8 +461,10 @@ export default function AgentSidebar({ notes, note, project, onInsert, onClose }
             onPaste={(e) => { const cd = e.clipboardData; let f = [...cd.items].filter((i) => i.kind === 'file' && i.type.startsWith('image/')).map((i) => i.getAsFile()).filter((x): x is File => !!x); if (!f.length) f = [...cd.files].filter((x) => x.type.startsWith('image/')); if (f.length) { e.preventDefault(); addFiles(f) } }}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
             className="flex-1 min-w-0 py-1 bg-transparent outline-none resize-none text-sm placeholder:text-dim max-h-40" />
-          <button onClick={send} disabled={busy || !prompt.trim()} title={t('send')}
-            className="btn-press p-2 rounded-full bg-accent text-bg hover:opacity-90 disabled:opacity-25"><ArrowUp size={15} /></button>
+          {busy
+            ? <button onClick={stop} title={t('stop')} className="btn-press p-2 rounded-full bg-accent text-bg hover:opacity-90"><Square size={15} fill="currentColor" /></button>
+            : <button onClick={send} disabled={!prompt.trim()} title={t('send')}
+                className="btn-press p-2 rounded-full bg-accent text-bg hover:opacity-90 disabled:opacity-25"><ArrowUp size={15} /></button>}
         </div>
         <div className="relative z-20 mt-2 flex items-center gap-2 px-1">
           <button onClick={() => setShowCfg((v) => !v)} title={status} className={`btn-press flex items-center gap-1.5 pl-2 pr-2 py-1 rounded-full border text-xs max-w-[65%] ${showCfg ? 'border-accent bg-accent-dim' : 'border-line hover:border-accent'}`}>

@@ -32,6 +32,25 @@ fn open_root() -> Result<(), String> {
     std::process::Command::new(opener).arg(fs::canonicalize(root()).map_err(|e| e.to_string())?).spawn().map(|_| ()).map_err(|e| e.to_string())
 }
 
+/// Is this agent's CLI on the PATH? Only the CLIs the app knows, so the name cannot carry anything else.
+#[tauri::command]
+async fn has_cli(name: String) -> bool {
+    if !["claude", "agy", "codex"].contains(&name.as_str()) { return false }
+    tauri::async_runtime::spawn_blocking(move || {
+        std::process::Command::new(if cfg!(windows) { "where" } else { "which" }).arg(&name).output().map(|o| o.status.success()).unwrap_or(false)
+    }).await.unwrap_or(false)
+}
+
+/// Open a web page in the default browser; https only, no shell involved on Windows beyond rundll32's URL handler.
+#[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    if !url.starts_with("https://") || url.contains(|c: char| c.is_whitespace() || c == '"' || c == '&') { return Err("bad url".into()) }
+    let mut cmd = if cfg!(windows) { let mut c = std::process::Command::new("rundll32"); c.args(["url.dll,FileProtocolHandler", &url]); c }
+        else if cfg!(target_os = "macos") { let mut c = std::process::Command::new("open"); c.arg(&url); c }
+        else { let mut c = std::process::Command::new("xdg-open"); c.arg(&url); c };
+    cmd.spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
 const HIDDEN: &str = ".desovault";
 
 fn has_deso(dir: &std::path::Path) -> bool {
@@ -440,6 +459,19 @@ fn spawn_in(cli: &str, args: &[String], input: Option<String>, cwd: Option<PathB
     Ok((out.map_err(|e| e.to_string())?, writer))
 }
 
+/// POSTs JSON through curl: the webview cannot call gateways that send no CORS headers (NVIDIA). The key and body go in on stdin, not the
+/// command line. Returns "body\nhttp_status". shortcut: whole answer only, no streaming; upgrade to tauri-plugin-http if that matters.
+#[tauri::command]
+async fn http_post(url: String, key: String, body: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let q = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n");
+        let cfg = format!("url = \"{}\"\nheader = \"content-type: application/json\"\nheader = \"authorization: Bearer {}\"\ndata-binary = \"{}\"\nwrite-out = \"\\n%{{http_code}}\"\n", q(&url), q(&key), q(&body));
+        let (o, _) = spawn("curl", &["-sS".into(), "-m".into(), "120".into(), "-K".into(), "-".into()], Some(cfg))?;
+        if !o.status.success() { return Err(String::from_utf8_lossy(&o.stderr).trim().to_string()) }
+        Ok(String::from_utf8_lossy(&o.stdout).into_owned())
+    }).await.map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 async fn worktree_create(id: String) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || worktree::create(&root(), &id).map(|d| d.to_string_lossy().into_owned())).await.map_err(|e| e.to_string())?
@@ -615,7 +647,7 @@ hand-written
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![list_notes, read_note, save_note, save_image, read_source, save_source, image_path, read_image, delete_note, run_agent, files_stamp, stop_agents, agy_models, claude_usage, agy_usage, keys_load, keys_save, watch_project, worktree_create, project_stamp, worktree_diff, worktree_apply, worktree_discard, index_project, set_root, get_root, open_root])
+        .invoke_handler(tauri::generate_handler![http_post, has_cli, open_url, list_notes, read_note, save_note, save_image, read_source, save_source, image_path, read_image, delete_note, run_agent, files_stamp, stop_agents, agy_models, claude_usage, agy_usage, keys_load, keys_save, watch_project, worktree_create, project_stamp, worktree_diff, worktree_apply, worktree_discard, index_project, set_root, get_root, open_root])
         .run(tauri::generate_context!())
         .expect("error while running Taurium");
 }

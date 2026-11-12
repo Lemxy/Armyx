@@ -12,7 +12,7 @@ import { graphMap, sliceFor, subMap, tokens, type Note } from '../deso'
 import { coRead, mapOpts, recordRead } from '../mapmem'
 import type { MenuItem } from './ContextMenu'
 import { getKey } from '../keys'
-import { dsChat, orChat } from '../deepseek'
+import { dsChat, nvChat, orChat } from '../deepseek'
 import { dsUsage } from '../dsprice'
 import { nanoAgy, nanoImage } from '../nano'
 import { getImg, imgId, putImg } from '../imgs'
@@ -21,13 +21,14 @@ import { BRIEF, BUDGET, clip, coldWait, ownCost, fromTemplate, leadChat, LOG_MAX
 
 const DEEPSEEK = MODELS.deepseek
 const OPENROUTER = MODELS.openrouter
+const NVIDIA = MODELS.nvidia
 const HAIKU = MODELS.claude.find((m) => m[0].includes('haiku'))![0]
 const sessionCost = new Map<string, number>() // claude session → the total cost it last reported (see ownCost)
 const warm = new Map<string, number>() // model + tools → when a claude call last started cold (see coldWait)
 const EFFORTS = ['low', 'medium', 'high', 'max'] as const
 const NANO = MODELS.nano
 const CODEX = [['', 'Codex (default model)']] as const // model comes from the user's Codex config
-const NAMES = { claude: 'Claude', agy: 'Antigravity', codex: 'Codex', deepseek: 'DeepSeek', openrouter: 'OpenRouter (free)', nano: 'Nano Banana' } as const
+const NAMES = { claude: 'Claude', agy: 'Antigravity', codex: 'Codex', deepseek: 'DeepSeek', openrouter: 'OpenRouter (free)', nvidia: 'NVIDIA', nano: 'Nano Banana' } as const
 // images in a paste: clipboard items first, files as the fallback
 const pastedPics = (cd: DataTransfer) => {
   const f = [...cd.items].filter((i) => i.kind === 'file' && i.type.startsWith('image/')).map((i) => i.getAsFile()).filter((x): x is File => !!x)
@@ -100,7 +101,7 @@ const builtin = (lang: 'ru' | 'en', agyLow: string, agyHigh: string): Template[]
     three,
     // Coder base: the lead splits the work by files, two coders write in parallel with full rights (no `tools` limit = no permission prompts), tester fixes, reviewer reads only.
     (() => {
-      const ru = lang === 'ru', O = 'claude-opus-5-5'
+      const ru = lang === 'ru'
       const split = ru ? ' Работай только в файлах, названных лидом, чужие не трогай.' : ' Work only in the files the lead named, do not touch the others.'
       const w = (id: string, y: number, r: Role, model: string, o: Partial<Node> = {}): Node => ({ ...role('c' + id, 680, r, model), id, y, text: r[ru ? 'ruText' : 'enText'] + split, ...o })
       return {
@@ -109,11 +110,39 @@ const builtin = (lang: 'ru' | 'en', agyLow: string, agyHigh: string): Template[]
           { ...lead, agent: 'agy', model: agyHigh, text: ru ? 'Разбей задачу по файлам на две независимые части без пересечений: агенту B — обычная часть, агенту C — самая сложная. Назови каждому файлы, которые он правит. Агенту D (тестировщик) дай команду проверки проекта.' : 'Split the task by files into two independent parts with no overlap: agent B gets the regular part, agent C the hardest one. Name the files each of them edits. Give agent D (tester) the project check command.' },
           role('a', 360, researcher, H),
           w('b', 40, coder, S, { effort: 'medium' }),
-          w('c', 300, coder, O, { effort: 'high', role: ru ? 'Кодер (сложный)' : 'Hard coder' }),
+          w('c', 300, coder, S, { effort: 'high', role: ru ? 'Кодер (сложный)' : 'Hard coder' }),
           { ...role('t', 1000, tester, S), tools: undefined, text: tester[ru ? 'ruText' : 'enText'] + (ru ? ' Если падает по очевидной причине, исправь минимальным diff и повтори (до 3 раз).' : ' If it fails for an obvious cause, fix it with a minimal diff and rerun (up to 3 times).') },
-          role('r', 1320, reviewer, O),
+          role('r', 1320, reviewer, S),
         ],
         edges: [['l', 'a'], ['a', 'b'], ['a', 'c'], ['l', 'b'], ['l', 'c'], ['l', 't'], ['b', 't'], ['c', 't'], ['t', 'r']],
+      } satisfies Template
+    })(),
+    // Debate arena: five mid-to-strong models from different makers answer the same question on their own; the judge (a reviewer with 4 rounds)
+    // answers OK with the common conclusion once their positions agree, otherwise it relays each side's arguments and the debaters answer them again.
+    // The debaters cannot see each other (a link between them would be a cycle), so the judge carries the arguments across. Letters: A-E debaters, J judge.
+    (() => {
+      const ru = lang === 'ru'
+      const debate = ru
+        ? 'Ты участник арены мнений. Дай свою независимую позицию по вопросу: вывод в первой строке, затем три самых сильных довода и что могло бы изменить твоё мнение. До 200 слов. Если пришла обратная связь судьи с доводами других, ответь по существу: признай, в чём они правы, возрази там, где они неправы, и назови обновлённую позицию. Не упрямься и не поддакивай. Файлы не меняй.'
+        : 'You are a debater on an opinion arena. Give your own independent position on the question: the conclusion on the first line, then your three strongest arguments and what would change your mind. Up to 200 words. If the judge sends feedback with the others\' arguments, answer them on the merits: concede where they are right, object where they are wrong, and state your updated position. Do not be stubborn and do not just agree. Do not change files.'
+      const d = (id: string, y: number, agent: Agent, model: string, name: string, o: Partial<Node> = {}): Node =>
+        ({ id, x: 360, y, kind: 'model', agent, model, name, role: ru ? 'Дебатёр' : 'Debater', text: debate, notes: [], ...o })
+      return {
+        name: ru ? 'Арена мнений' : 'Debate arena',
+        nodes: [
+          { ...lead, text: ru
+            ? 'Каждому агенту A, B, C, D, E дай один и тот же полный вопрос пользователя дословно (они не видят задачу) и попроси независимую позицию. Ничего не решай сам.'
+            : 'Give every agent A, B, C, D, E the same full user question verbatim (they cannot see the task) and ask for an independent position. Decide nothing yourself.' },
+          d('a', 40, 'claude', S, 'Claude Sonnet', { effort: 'medium', tools: READ_ONLY }),
+          d('b', 300, 'agy', agyHigh, 'Gemini Flash', { tools: READ_ONLY }), // READ_ONLY keeps it from counting as a writer: a writer would be rerun alone and skip the others' round
+          d('c', 560, 'nvidia', 'poolside/laguna-xs-2.1', 'Laguna XS 2.1'),
+          d('d', 820, 'nvidia', 'nvidia/nemotron-3.5-super-vl-120b-a12b', 'Nemotron Super 120B'),
+          d('e', 1080, 'nvidia', 'mistralai/mistral-large-4-1t-a52b', 'Mistral Large 4'),
+          { id: 'j', x: 720, y: 560, kind: 'model', agent: 'claude', model: S, effort: 'medium', tools: READ_ONLY, review: 4, name: ru ? 'Судья' : 'Judge', role: ru ? 'Судья' : 'Judge', notes: [], text: ru
+            ? 'Ты судья арены мнений. Прочти позиции всех участников. Они пришли к единому мнению, если у них один и тот же главный вывод, а различаются лишь второстепенные детали. Тогда ответь OK в первой строке, а ниже напиши общий вывод, главные доводы и остаточные разногласия, если они есть. Если согласия нет: на каждого участника одной-двумя строками дай его позицию и сильнейший довод, затем назови, в чём именно они расходятся и на что каждый должен ответить. Участники не видят друг друга, поэтому приводи доводы других прямо в тексте. Не принимай чью-то сторону и не выдумывай согласия.'
+            : 'You are the judge of an opinion arena. Read every debater\'s position. They have reached a common view when they share the same main conclusion and differ only in minor details. Then answer OK on the first line and below it write the common conclusion, the main arguments and any remaining disagreement. If they do not agree: for each debater give its position and strongest argument in a line or two, then name exactly where they differ and what each must answer. The debaters cannot see each other, so quote the others\' arguments in the text. Do not take a side and do not invent agreement.' },
+        ],
+        edges: [['l', 'a'], ['l', 'b'], ['l', 'c'], ['l', 'd'], ['l', 'e'], ['a', 'j'], ['b', 'j'], ['c', 'j'], ['d', 'j'], ['e', 'j']],
       } satisfies Template
     })(),
     // Who does what: Gemini leads and designs (long context, cheap), Nano Banana Pro draws, DeepSeek writes bulk text and balance tables,
@@ -154,7 +183,7 @@ const SLOW = 120 // seconds a block may run before its timer turns to a warning
 const k = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`)
 
 const GRID = 24, CW = 3000, CH = 2000, MM = 0.06 // snap step, canvas size, minimap scale
-const HUE = { claude: 'var(--m6)', agy: 'var(--m3)', deepseek: 'var(--m4)', openrouter: 'var(--m4)', nano: 'var(--m5)', codex: 'var(--m7)' } as const
+const HUE = { claude: 'var(--m6)', agy: 'var(--m3)', deepseek: 'var(--m4)', openrouter: 'var(--m4)', nvidia: 'var(--m2)', nano: 'var(--m5)', codex: 'var(--m7)' } as const
 const hue = (n: Node) => (n.kind === 'rules' ? 'var(--mut)' : HUE[n.agent ?? 'claude'])
 const W = 272, HEAD = 20 // node width; y of the link handles, measured from the node's top
 const uid = () => Math.random().toString(36).slice(2, 9)
@@ -233,7 +262,7 @@ export default function Orchestra({ notes, project, onMenu }: { notes: Note[]; p
   const slowNotes = useDebounced(notes) // mounted even when hidden: don't rebuild the map on every keystroke elsewhere
   const map = useMemo(() => graphMap(slowNotes, undefined, '', mapOpts(slowNotes)), [slowNotes])
   const mapTok = useMemo(() => tokens(map), [map])
-  const models = (a: Agent): readonly (readonly [string, string])[] => (a === 'claude' ? MODELS.claude : a === 'deepseek' ? DEEPSEEK : a === 'openrouter' ? OPENROUTER : a === 'codex' ? CODEX : a === 'nano' ? NANO : agy)
+  const models = (a: Agent): readonly (readonly [string, string])[] => (a === 'claude' ? MODELS.claude : a === 'deepseek' ? DEEPSEEK : a === 'openrouter' ? OPENROUTER : a === 'nvidia' ? NVIDIA : a === 'codex' ? CODEX : a === 'nano' ? NANO : agy)
   // An embedded note in full, or, if large, a pointer the agent reads itself (agents run in the project folder with file tools).
   const embed = (names: string[]) => names.map((x) => { const c = notes.find((k) => k.name === x)?.content ?? ''
     return `## @${x}\n${c.length > NOTE_MAX ? `(large note, ~${tokens(c)} tok: read the file \`${x}.deso\` in the project folder or its \`.desovault\` folder)` : c}` }).join('\n\n')
@@ -317,6 +346,7 @@ export default function Orchestra({ notes, project, onMenu }: { notes: Note[]; p
       { label: 'Codex — Coming soon', disabled: true },
       { label: 'DeepSeek', children: DEEPSEEK.map(([m, l]) => ({ label: l, onClick: () => add(x, y, { agent: 'deepseek', model: m }) })) },
       { label: 'OpenRouter (free)', children: OPENROUTER.map(([m, l]) => ({ label: l, onClick: () => add(x, y, { agent: 'openrouter', model: m }) })) },
+      { label: 'NVIDIA', children: NVIDIA.map(([m, l]) => ({ label: l, onClick: () => add(x, y, { agent: 'nvidia', model: m }) })) },
       { label: 'Nano Banana', children: NANO.map(([m, l]) => ({ label: l, onClick: () => add(x, y, { agent: 'nano', model: m }) })) },
       { label: t('blockRules'), sep: true, onClick: () => add(x, y, { kind: 'rules' }) },
     ]
@@ -398,9 +428,10 @@ ${clip(d)}
   // its --conversation resume was ~8x slower than a fresh call when tried.
   const exec = async (n: Node, build: (resumed: boolean) => string, { keep, tools, effort = '', maxTurns, session, resume }: Opts = {}): Promise<Reply> => {
     if (n.agent === 'nano') return nano(n.model ?? NANO[0][0], build(false), n.images)
-    if ((n.agent === 'deepseek' || n.agent === 'openrouter') && n.images?.length) throw new Error(t('noImagesDs'))
+    if ((n.agent === 'deepseek' || n.agent === 'openrouter' || n.agent === 'nvidia') && n.images?.length) throw new Error(t('noImagesDs'))
     if (n.agent === 'deepseek') return deepseek(n.model ?? DEEPSEEK[0][0], build(false))
-    if (n.agent === 'openrouter') return deepseek(n.model ?? OPENROUTER[0][0], build(false), true)
+    if (n.agent === 'openrouter') return deepseek(n.model ?? OPENROUTER[0][0], build(false), 'openrouter')
+    if (n.agent === 'nvidia') return deepseek(n.model ?? NVIDIA[0][0], build(false), 'nvidia')
     if (!inTauri) throw new Error(t('desktopOnly'))
     const cli = n.agent === 'agy' || n.agent === 'codex' ? n.agent : 'claude'
     const go = async (resumed: boolean, session?: string) => {
@@ -432,11 +463,11 @@ ${clip(d)}
   }
 
   // DeepSeek has no CLI: a plain API call (stateless, so the dialogue is replayed in the prompt like agy).
-  const deepseek = async (model: string, prompt: string, viaOr = false): Promise<Answer> => { // viaOr: the same plain call, to OpenRouter
-    const key = getKey(viaOr ? 'openrouter' : 'deepseek')
-    if (!key) throw new Error(t(viaOr ? 'orNoKey' : 'dsNoKey'))
+  const deepseek = async (model: string, prompt: string, via: 'deepseek' | 'openrouter' | 'nvidia' = 'deepseek'): Promise<Answer> => { // via: the same plain call to another OpenAI-compatible gateway
+    const key = getKey(via)
+    if (!key) throw new Error(t(via === 'openrouter' ? 'orNoKey' : via === 'nvidia' ? 'nvNoKey' : 'dsNoKey'))
     if (!prompt.trim()) throw new Error(t('orchNoInput'))
-    const j = await (viaOr ? orChat : dsChat)(key, { model, messages: [{ role: 'system', content: BRIEF }, { role: 'user', content: prompt }] })
+    const j = await ({ deepseek: dsChat, openrouter: orChat, nvidia: nvChat })[via](key, { model, messages: [{ role: 'system', content: BRIEF }, { role: 'user', content: prompt }] })
     return { text: String(j.choices?.[0]?.message?.content ?? '').trim(), ...dsUsage(model, j.usage) }
   }
 
@@ -578,7 +609,7 @@ ${clip(d)}
                   <select value={`${n.agent ?? 'claude'}:${n.model ?? MODELS.claude[0][0]}`} onChange={(e) => { if (e.target.value.startsWith('preset:')) return patch(n.id, { ...resolve(PRESETS[+e.target.value.slice(7)]), role: PRESETS[+e.target.value.slice(7)][lang], review: undefined }); const [agent, model] = e.target.value.split(':') as [Agent, string]; patch(n.id, { agent, model, role: undefined, tools: undefined, review: undefined, ...(agent !== 'claude' && { effort: undefined }) }) }}
                     className="min-w-0 bg-transparent text-micro outline-none text-mut">
                     <optgroup label={`★ ${lang === 'ru' ? 'Рекомендуемые' : 'Recommended'}`}>{PRESETS.map((p, i) => <option key={i} value={`preset:${i}`} className="bg-panel">{presetLabel(p)}</option>)}</optgroup>
-                    {(['claude', 'agy', 'codex', 'deepseek', 'openrouter', 'nano'] as const).map((a) => <optgroup key={a} label={NAMES[a]}>
+                    {(['claude', 'agy', 'codex', 'deepseek', 'openrouter', 'nvidia', 'nano'] as const).map((a) => <optgroup key={a} label={NAMES[a]}>
                       {models(a).map(([v, l]) => <option key={v} value={`${a}:${v}`} disabled={a === 'codex'} className="bg-panel">{a === 'codex' ? 'Codex — Coming soon' : l}</option>)}</optgroup>)}
                   </select>
                 {n.role && <span className="text-micro text-accent truncate shrink-0 max-w-[45%]">· {n.role}{n.review ? ` ↻${n.review}` : ''}</span>}

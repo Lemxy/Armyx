@@ -5,8 +5,9 @@ import gemini from './assets/brands/gemini-color.svg'
 import deepseek from './assets/brands/deepseek-color.svg'
 import openrouter from './assets/brands/openrouter.svg'
 import openai from './assets/brands/openai.svg'
+import nvidia from './assets/brands/nvidia-color.svg'
 
-const LOGO = { claude: [claude, false], agy: [gemini, false], deepseek: [deepseek, false], openrouter: [openrouter, true], codex: [openai, true] } as const
+const LOGO = { claude: [claude, false], agy: [gemini, false], deepseek: [deepseek, false], openrouter: [openrouter, true], nvidia: [nvidia, false], codex: [openai, true] } as const
 
 /** The logo of an agent kind; Nano Banana is a banana (Gemini's image models), anything unknown shows nothing. */
 export function Brand({ agent, size = 16, color = 'currentColor' }: { agent: string; size?: number; color?: string }) {

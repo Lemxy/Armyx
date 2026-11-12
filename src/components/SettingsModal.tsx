@@ -6,7 +6,7 @@ import { getKey, setKey } from '../keys'
 
 const label = 'text-micro text-dim'
 
-const FIELDS = [['deepseek', 'dsKey', 'sk-…'], ['openrouter', 'orKey', 'sk-or-…'], ['agy', 'gemKey', 'AIza…'], ['claude', 'claudeKey', 'sk-ant-…']] as const
+const FIELDS = [['deepseek', 'dsKey', 'sk-…'], ['openrouter', 'orKey', 'sk-or-…'], ['nvidia', 'nvKey', 'nvapi-…'], ['agy', 'gemKey', 'AIza…'], ['claude', 'claudeKey', 'sk-ant-…']] as const
 const input = 'px-3 py-2 rounded-lg bg-field border border-line focus:border-accent outline-none text-sm placeholder:text-dim'
 
 function KeyField({ id, name, hint }: { id: string; name: string; hint: string }) {

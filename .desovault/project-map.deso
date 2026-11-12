@@ -3,7 +3,7 @@
 ?generated: scan
 ?schema: 3
 ?files: 74 scanned, 74 indexed
-?source_bytes: 617616
+?source_bytes: 630671
 #overview
 .: 6 files
 archive: 21 files
@@ -11,8 +11,8 @@ mcp: 1 files
 src: 39 files
 src-tauri: 7 files
 Hubs (most connected):
-->@src-components-agentsidebar-tsx
 ->@src-components-orchestra-tsx
+->@src-components-agentsidebar-tsx
 ->@src-deso-ts
 ->@src-vault-ts
 ->@src-app-tsx

@@ -3,7 +3,7 @@ import type { Answer } from './vault'
 import type { Key } from './i18n'
 import { MAP_INTRO } from './deso'
 
-export type Agent = 'claude' | 'agy' | 'codex' | 'deepseek' | 'openrouter' | 'nano'
+export type Agent = 'claude' | 'agy' | 'codex' | 'deepseek' | 'openrouter' | 'nvidia' | 'nano'
 export type Use = Omit<Answer, 'text' | 'files' | 'wide'> & { same?: boolean }
 export type Node = {
   id: string; x: number; y: number; kind: 'model' | 'rules' | 'start'
@@ -228,7 +228,7 @@ export async function runOrchestra(o: Orch, d: Deps, { msg, force = false, only 
       opts = { effort: workerEffort(n), tools: n.tools, maxTurns: MAX_TURNS }
     }
     // blocks that can read the project also depend on its state: after the code changed their old answer is stale
-    const stamp = n.agent !== 'deepseek' && n.agent !== 'openrouter' && n.agent !== 'nano' ? await d.stamp().catch(() => '') : ''
+    const stamp = n.agent !== 'deepseek' && n.agent !== 'openrouter' && n.agent !== 'nvidia' && n.agent !== 'nano' ? await d.stamp().catch(() => '') : ''
     const part = [n.agent ?? 'claude', n.model, opts.effort, opts.tools, n.images?.join(','), o.iso, JSON.stringify(n.cli ?? null)].join('\0')
     const base = hash(part + '\0' + key), sum = hash([part, stamp, key].join('\0')), old = prev.get(n.id)
     // "run this block again": blocks outside it ignore the project's state (an earlier writer changed it), only their own input counts

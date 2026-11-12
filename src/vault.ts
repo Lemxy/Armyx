@@ -127,3 +127,10 @@ export const readSource = (path: string) => call<string>('read_source', { path }
 export const saveSource = (path: string, content: string) => call<void>('save_source', { path, content })
 export const imagePath = (name: string, ext: string) => call<string>('image_path', { name, ext })
 export const readImage = (name: string, ext: string) => call<number[]>('read_image', { name, ext })
+
+/** POST JSON from the Rust side: the webview cannot call gateways that send no CORS headers (NVIDIA). Resolves to "body\nstatus". */
+export const httpPost = (url: string, key: string, body: string) => call<string>('http_post', { url, key, body })
+
+export const hasCli = (name: string) => (inTauri ? call<boolean>('has_cli', { name }) : Promise.resolve(false))
+/** Opens a web page in the system browser (the webview itself would not leave the app). */
+export const openUrl = (url: string) => (inTauri ? call<void>('open_url', { url }) : Promise.resolve(void window.open(url, '_blank')))

@@ -13,3 +13,6 @@ archive/map-bench/edit-tasks.novafull*.json
 
 .claude/settings.local.json
 .tools/
+
+# chat attachments stored by the app (personal screenshots, not project files)
+.desovault/images/

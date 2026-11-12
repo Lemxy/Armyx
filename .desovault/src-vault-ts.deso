@@ -1,10 +1,10 @@
 # src/vault.ts
 ?path: src/vault.ts
 ?kind: ts
-?lines: 129
+?lines: 136
 ?generated: scan
 ?doc: Static imports: dynamic ones are re-optimized by Vite at runtime and can 404 against a sta Project id = browser: a name; Tauri: a folder path. A folder with no notes (e.g. someone's code project) gets its graph generated once, in one Browser mode persists the whole vault; Tauri mode writes only the changed file. Isolated runs: agents work in a git worktree (id = the orchestra id) until you apply or di ---- Project management ---- The project file a scanned note stands for, edited in place (desktop only; the backend kee
-?calls: ~src-tauri/src/lib.rs(agy_models+agy_usage+claude_usage), ~archive/map-bench/gen-polyglot.mjs(register), ~src-tauri/src/scan.rs(resolve), ~src-tauri/src/worktree.rs(discard)
+?calls: ~src-tauri/src/lib.rs(agy_models+agy_usage+claude_usage), ~archive/map-bench/gen-polyglot.mjs(register), ~src-tauri/src/scan.rs(resolve), ~src-tauri/src/worktree.rs(discard), ~src/components/Orchestra.tsx(NVIDIA)
 ?callers: src/App.tsx, src/components/ProjectModal.tsx, src/components/Sidebar.tsx, ~archive/map-bench/rank.mjs, ~src/components/CircuitGraph.tsx, ~src/i18n.ts
 ?exports: inTauri, backend, projectLabel, activeProject, listProjects, loadNotes, switchProject, saveNote
 ?symbols: PROJECTS, loadNotes, switchProject, saveNote, deleteNote, pickFolder, newProjectId, removeProject
@@ -16,3 +16,4 @@
 ->@archive-map-bench-gen-polyglot-mjs
 ->@src-tauri-src-scan-rs
 ->@src-tauri-src-worktree-rs
+->@src-components-orchestra-tsx

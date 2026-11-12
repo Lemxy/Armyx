@@ -1,7 +1,7 @@
 # src/brands.tsx
 ?path: src/brands.tsx
 ?kind: tsx
-?lines: 20
+?lines: 21
 ?generated: scan
 ?about: Logos of the model makers (Lobe Icons, from the npm package @lobehub/icons-static-svg), kept in src/
 ?doc: Logos of the model makers (Lobe Icons, from the npm package @lobehub/icons-static-svg), ke The coloured ones go in as pictures; the one-colour ones are a mask, so they take the bloc
