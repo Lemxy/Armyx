@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 370" width="820" height="370" role="img" aria-labelledby="t">
+<title id="t">Armyx orchestra: cost per call saved by each technique (real claude -p runs)</title>
+<style>
+  svg { --bg:#fcfcfb; --t1:#0b0b0b; --t2:#52514e; --t3:#7a7975; --grid:#e4e3df; --s1:#2a78d6; font-family:-apple-system,"Segoe UI",Inter,Helvetica,Arial,sans-serif }
+  @media (prefers-color-scheme: dark) { svg { --bg:#1a1a19; --t1:#f0efec; --t2:#c3c2b7; --t3:#8f8e88; --grid:#33332f; --s1:#3987e5 } }
+  .bg{fill:var(--bg)} .bar{fill:var(--s1)} .grid{stroke:var(--grid);stroke-width:1}
+  .t1{fill:var(--t1);font-size:14px;font-weight:600} .t2{fill:var(--t2);font-size:12.5px} .t3{fill:var(--t3);font-size:12px}
+  .big{font-size:15px} .h{fill:var(--t1);font-size:18px;font-weight:700}
+</style>
+<rect class="bg" width="820" height="370" rx="12"/>
+<text class="h" x="24" y="34">Cost per call saved by each orchestra technique</text>
+<text class="t2" x="24" y="54">Real claude -p runs, Sonnet 5.5 workers; same answers before and after (stagger: one group of 4 calls)</text>
+<line class="grid" x1="300" x2="300" y1="64" y2="336"/><text class="t3" x="300" y="352" text-anchor="middle">0%</text><line class="grid" x1="382.5" x2="382.5" y1="64" y2="336"/><text class="t3" x="382.5" y="352" text-anchor="middle">25%</text><line class="grid" x1="465" x2="465" y1="64" y2="336"/><text class="t3" x="465" y="352" text-anchor="middle">50%</text><line class="grid" x1="547.5" x2="547.5" y1="64" y2="336"/><text class="t3" x="547.5" y="352" text-anchor="middle">75%</text><line class="grid" x1="630" x2="630" y1="64" y2="336"/><text class="t3" x="630" y="352" text-anchor="middle">100%</text>
+<g><title>Final answer on Haiku: $0.0102 → $0.0009 per call (-91%, n=6)</title>
+  <text class="t1" x="286" y="94" text-anchor="end">Final answer on Haiku</text>
+  <text class="t3" x="286" y="110" text-anchor="end">lead writes the summary on the cheap model</text>
+  <path class="bar" d="M300,86h296.3a4,4 0 0 1 4,4v12a4,4 0 0 1 -4,4h-296.3z"/>
+  <text class="t1 big" x="610.3" y="101">91% cheaper</text>
+  <text class="t2" x="610.3" y="117">$0.0102 → $0.0009</text></g>
+<g><title>Review resumes the session: $0.0296 → $0.0072 per call (-76%, n=6)</title>
+  <text class="t1" x="286" y="146" text-anchor="end">Review resumes the session</text>
+  <text class="t3" x="286" y="162" text-anchor="end">round 2 continues the worker, no resend</text>
+  <path class="bar" d="M300,138h246.8a4,4 0 0 1 4,4v12a4,4 0 0 1 -4,4h-246.8z"/>
+  <text class="t1 big" x="560.8" y="153">76% cheaper</text>
+  <text class="t2" x="560.8" y="169">$0.0296 → $0.0072</text></g>
+<g><title>Staggered parallel start: $0.1202 → $0.0410 per call (-66%, n=3)</title>
+  <text class="t1" x="286" y="198" text-anchor="end">Staggered parallel start</text>
+  <text class="t3" x="286" y="214" text-anchor="end">4 calls: 1 warms the cache, 3 reuse it</text>
+  <path class="bar" d="M300,190h213.8a4,4 0 0 1 4,4v12a4,4 0 0 1 -4,4h-213.8z"/>
+  <text class="t1 big" x="527.8" y="205">66% cheaper</text>
+  <text class="t2" x="527.8" y="221">$0.1202 → $0.0410</text></g>
+<g><title>Code slice in the brief: $0.0178 → $0.0079 per call (-56%, n=30)</title>
+  <text class="t1" x="286" y="250" text-anchor="end">Code slice in the brief</text>
+  <text class="t3" x="286" y="266" text-anchor="end">the worker gets the code it names</text>
+  <path class="bar" d="M300,242h180.8a4,4 0 0 1 4,4v12a4,4 0 0 1 -4,4h-180.8z"/>
+  <text class="t1 big" x="494.8" y="257">56% cheaper</text>
+  <text class="t2" x="494.8" y="273">$0.0178 → $0.0079</text></g>
+<g><title>Reviewer gets the git diff: $0.0215 → $0.0191 per call (-11%, n=6)</title>
+  <text class="t1" x="286" y="302" text-anchor="end">Reviewer gets the git diff</text>
+  <text class="t3" x="286" y="318" text-anchor="end">no hunting for what changed</text>
+  <path class="bar" d="M300,294h32.3a4,4 0 0 1 4,4v12a4,4 0 0 1 -4,4h-32.3z"/>
+  <text class="t1 big" x="346.3" y="309">11% cheaper</text>
+  <text class="t2" x="346.3" y="325">$0.0215 → $0.0191</text></g>
+</svg>
